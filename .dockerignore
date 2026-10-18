@@ -26,3 +26,13 @@ terraform-aws-ecs-fargate/
 compose.yml
 compose.yaml
 requirements-dev.txt
+
+# Repository documentation and build configuration
+/mypy.ini
+/.gitignore
+/.dockerignore
+/Dockerfile
+
+# Docker comparison files
+/Dockerfile.single
+/Dockerfile.multistage

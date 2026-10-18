@@ -584,3 +584,90 @@ Healthchecks instance in production.
   * Have monitoring in place to be sure the Healthchecks instance itself is operational
     (is accepting pings, is sending out alerts, is not running out of resources).
 
+
+## Week 7 Task 1 — Docker Image Optimization
+
+### Implementation
+
+The main Dockerfile uses separate builder and runtime stages.
+The builder prepares curl, Python dependencies and static assets.
+The runtime stage receives the application, its Python environment,
+selected curl files and the system libraries required at runtime.
+
+Build tools are excluded from the final runtime image.
+The application runs as the non-root user app, UID 10001.
+
+Additional improvements:
+- Install the final Django and PyJWT versions directly from requirements.txt,
+  avoiding a second installation that replaces earlier versions.
+- Copy requirements.txt before application source to preserve dependency caching.
+- Use a BuildKit cache mount for pip without including that cache in image layers.
+- Handle dependency permissions before copying application files, so changes
+  to application source do not require processing dependency permissions again.
+- Exclude secrets, local environments and infrastructure files using .dockerignore.
+- Retain CHANGELOG.md because hc/settings.py reads it during initialization.
+
+### Single-stage versus multi-stage experiment
+
+Dockerfile.single and Dockerfile.multistage use the same application source,
+requirements and Python base image.
+
+| Comparison image | Size in bytes | Size in decimal MB |
+| --- | ---: | ---: |
+| healthchecks:single | 856196937 | 856.20 |
+| healthchecks:multi | 373737475 | 373.74 |
+
+The multi-stage comparison image is 482459462 bytes smaller:
+a reduction of 56.35% relative to the single-stage comparison image.
+
+The original Week 6 Dockerfile already used multiple stages.
+This experiment demonstrates their benefit against the constructed
+single-stage alternative; it is not a 56.35% improvement over Week 6.
+
+Both comparison images passed:
+- Django WSGI initialization;
+- Gunicorn and PycURL imports;
+- PostgreSQL connection through Django.
+
+GCC was available in the single-stage image and absent from the
+multi-stage runtime image.
+
+### Build measurements
+
+Recorded on Docker Desktop using linux/arm64:
+
+| Scenario | Time |
+| --- | ---: |
+| Build with Docker layer cache disabled | 159.81 seconds |
+| Rebuild using Docker layer cache | 12.15 seconds |
+
+The rebuild still executed the application copy and permission steps.
+The pip cache mount may retain package data when --no-cache is used.
+These measurements represent different cache conditions, not an isolated
+measurement of the speed improvement over the original Dockerfile.
+
+### Reproduction
+
+Build the comparison images:
+
+    docker build --platform linux/arm64 -f Dockerfile.single -t healthchecks:single .
+    docker build --platform linux/arm64 -f Dockerfile.multistage -t healthchecks:multi .
+
+Build the submitted application image:
+
+    docker build --platform linux/arm64 -t healthchecks:week7-task1 .
+
+Measured image sizes and the comparison override are stored in evidence/.
+The final main-image measurement is in evidence/task1-final-image.txt.
+
+### Lessons learned
+
+A successful image build does not guarantee successful startup:
+Gunicorn must be installed explicitly.
+
+Files must be checked for application usage before excluding them.
+Removing CHANGELOG.md prevented Django settings from loading.
+
+Multi-stage builds reduce the contents of the distributed runtime image.
+They do not inherently make application code execute faster.
+

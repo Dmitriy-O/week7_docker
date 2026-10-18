@@ -83,14 +83,12 @@ RUN python -m venv /opt/venv
 COPY requirements.txt ./
 
 # Build PycURL against our verified libcurl.
-# Apply Python security updates only inside the container.
-RUN PYCURL_CURL_CONFIG=/opt/curl/bin/curl-config \
+# Keep pip's cache outside the image layers.
+RUN --mount=type=cache,id=week7-pip-arm64-py314-curl-${CURL_VERSION},target=/root/.cache/pip \
+    PYCURL_CURL_CONFIG=/opt/curl/bin/curl-config \
     PYCURL_SSL_LIBRARY=openssl \
-        python -m pip install --no-cache-dir --no-binary=pycurl \
+        python -m pip install --no-binary=pycurl \
             -r requirements.txt \
-    && python -m pip install --no-cache-dir \
-        "PyJWT[crypto]==2.15.0" \
-        "Django[argon2]==6.1.2" \
     && python -m pip check
 
 COPY . .
@@ -100,7 +98,6 @@ RUN SECRET_KEY=build-only-placeholder \
     && SECRET_KEY=build-only-placeholder \
         python manage.py collectstatic --noinput \
     && python -m pip uninstall -y pip
-
 
 FROM python:3.14-slim-trixie AS runtime
 
@@ -112,7 +109,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Runtime libraries only; do not install Debian's libcurl or librtmp.
+# Install runtime libraries.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libpq5 \
@@ -135,14 +132,21 @@ RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app \
         --create-home --shell /usr/sbin/nologin app
 
+# Copy curl before changing its permissions.
 COPY --from=builder /opt/curl/lib/libcurl.so* /opt/curl/lib/
 COPY --from=builder /opt/curl/bin/curl /opt/curl/bin/curl
 COPY --from=builder /opt/curl/share/licenses/ /opt/curl/share/licenses/
 
+# Copy Python dependencies once.
 COPY --from=builder /opt/venv /opt/venv
+
+# Both dependency directories now exist.
+RUN chmod -R a+rX,go-w /opt/venv /opt/curl
+
+# Handle application files separately.
 COPY --from=builder --chown=root:root /app /app
 
-RUN chmod -R a+rX,go-w /app /opt/venv /opt/curl
+RUN chmod -R a+rX,go-w /app
 
 USER app
 

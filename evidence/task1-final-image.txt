@@ -1,0 +1,1 @@
+IMAGE=healthchecks:week7-task1 SIZE_BYTES=373742005 PLATFORM=linux/arm64
