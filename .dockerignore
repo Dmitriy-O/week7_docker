@@ -36,3 +36,6 @@ requirements-dev.txt
 # Docker comparison files
 /Dockerfile.single
 /Dockerfile.multistage
+/docker-compose.yaml
+
+/README-week7.md
