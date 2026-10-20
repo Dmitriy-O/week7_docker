@@ -1,5 +1,23 @@
 name: week7-healthchecks
 
+# Shared image, build configuration and environment.
+x-app: &app
+  image: healthchecks:week7-task1
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment:
+    SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}"
+    DEBUG: "False"
+    DB: postgres
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_NAME: hc
+    DB_USER: hc
+    DB_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+    SITE_ROOT: http://localhost:8000
+    ALLOWED_HOSTS: localhost,127.0.0.1
+
 services:
   db:
     image: postgres:17-bookworm
@@ -18,27 +36,23 @@ services:
       retries: 12
       start_period: 10s
 
+  migrate:
+    <<: *app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
-    image: healthchecks:week7-task1
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}"
-      DEBUG: "False"
-      DB: postgres
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_NAME: hc
-      DB_USER: hc
-      DB_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
-      SITE_ROOT: http://localhost:8000
-      ALLOWED_HOSTS: localhost,127.0.0.1
+    <<: *app
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:

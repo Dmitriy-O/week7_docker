@@ -1,0 +1,2 @@
+Name=week7-task3-demo-bridge Driver=bridge Scope=local
+Name=week7-task3-demo-overlay Driver=overlay Scope=swarm

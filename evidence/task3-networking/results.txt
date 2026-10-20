@@ -1,0 +1,15 @@
+host-client-1    | Mode: host
+host-client-1    | Target: http://127.0.0.1:18082/
+host-client-1    | Resolved IP: 127.0.0.1
+host-client-1    | HTTP: 200
+host-client-1    | host: PASS
+bridge-client-1  | Mode: bridge
+bridge-client-1  | Target: http://bridge-server:18082/
+bridge-client-1  | Resolved IP: 172.22.0.2
+bridge-client-1  | HTTP: 200
+bridge-client-1  | bridge: PASS
+overlay-client-1  | Mode: overlay
+overlay-client-1  | Target: http://overlay-server:18082/
+overlay-client-1  | Resolved IP: 10.0.1.2
+overlay-client-1  | HTTP: 200
+overlay-client-1  | overlay: PASS

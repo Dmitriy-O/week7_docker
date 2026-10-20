@@ -1,0 +1,7 @@
+NAME                                  IMAGE                      COMMAND                  SERVICE          CREATED          STATUS                      PORTS
+week7-network-demo-bridge-client-1    healthchecks:week7-task1   "python -c 'import o…"   bridge-client    49 seconds ago   Exited (0) 46 seconds ago   
+week7-network-demo-bridge-server-1    healthchecks:week7-task1   "python -m http.serv…"   bridge-server    49 seconds ago   Up 48 seconds (healthy)     8000/tcp
+week7-network-demo-host-client-1      healthchecks:week7-task1   "python -c 'import o…"   host-client      49 seconds ago   Exited (0) 46 seconds ago   
+week7-network-demo-host-server-1      healthchecks:week7-task1   "python -m http.serv…"   host-server      49 seconds ago   Up 48 seconds (healthy)     
+week7-network-demo-overlay-client-1   healthchecks:week7-task1   "python -c 'import o…"   overlay-client   49 seconds ago   Exited (0) 45 seconds ago   
+week7-network-demo-overlay-server-1   healthchecks:week7-task1   "python -m http.serv…"   overlay-server   49 seconds ago   Up 48 seconds (healthy)     8000/tcp

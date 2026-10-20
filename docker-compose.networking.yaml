@@ -1,0 +1,101 @@
+name: week7-network-demo
+
+x-server: &server
+  image: healthchecks:week7-task1
+  command:
+    - python
+    - -m
+    - http.server
+    - "18082"
+    - --bind
+    - 0.0.0.0
+    - --directory
+    - /tmp
+  healthcheck:
+    test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18082/', timeout=2).close()"
+    interval: 2s
+    timeout: 3s
+    retries: 10
+
+x-client: &client
+  image: healthchecks:week7-task1
+  restart: "no"
+  command:
+    - python
+    - -c
+    - |
+      import os
+      import socket
+      import urllib.request
+      from urllib.parse import urlsplit
+
+      url = os.environ["TARGET_URL"]
+      mode = os.environ["MODE"]
+      host = urlsplit(url).hostname
+
+      print("Mode:", mode)
+      print("Target:", url)
+      print("Resolved IP:", socket.gethostbyname(host))
+
+      with urllib.request.urlopen(url, timeout=10) as response:
+          print("HTTP:", response.status)
+          assert response.status == 200
+
+      print(mode + ": PASS")
+
+services:
+  bridge-server:
+    <<: *server
+    networks: [demo-bridge]
+
+  bridge-client:
+    <<: *client
+    environment:
+      MODE: bridge
+      TARGET_URL: http://bridge-server:18082/
+    networks: [demo-bridge]
+    depends_on:
+      bridge-server:
+        condition: service_healthy
+
+  host-server:
+    <<: *server
+    network_mode: host
+
+  host-client:
+    <<: *client
+    environment:
+      MODE: host
+      TARGET_URL: http://127.0.0.1:18082/
+    network_mode: host
+    depends_on:
+      host-server:
+        condition: service_healthy
+
+  overlay-server:
+    <<: *server
+    networks: [demo-overlay]
+
+  overlay-client:
+    <<: *client
+    environment:
+      MODE: overlay
+      TARGET_URL: http://overlay-server:18082/
+    networks: [demo-overlay]
+    depends_on:
+      overlay-server:
+        condition: service_healthy
+
+networks:
+  demo-bridge:
+    name: week7-task3-demo-bridge
+    driver: bridge
+
+  demo-overlay:
+    name: week7-task3-demo-overlay
+    driver: overlay
+    attachable: true
