@@ -1,0 +1,12 @@
+{
+  "ingress": {
+    "enabled": true,
+    "host": "healthchecks.100-49-157-237.sslip.io",
+    "acmeServer": "https://acme-v02.api.letsencrypt.org/directory"
+  },
+  "env": {
+    "ALLOWED_HOSTS": "localhost,127.0.0.1,healthchecks,healthchecks.100-49-157-237.sslip.io",
+    "SITE_ROOT": "https://healthchecks.100-49-157-237.sslip.io",
+    "SECURE_PROXY_SSL_HEADER": "HTTP_X_FORWARDED_PROTO,https"
+  }
+}

@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rds-network-check
+  namespace: healthchecks
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: check
+          image: 047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks:week8-v1
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: DB_HOST
+              value: week8-healthchecks.c6h4umui4kp1.us-east-1.rds.amazonaws.com
+
+          command: ["python", "-c"]
+          args:
+            - |
+              import os
+              import socket
+
+              host = os.environ["DB_HOST"]
+              port = 5432
+
+              addresses = sorted({
+                  item[4][0]
+                  for item in socket.getaddrinfo(
+                      host, port, type=socket.SOCK_STREAM
+                  )
+              })
+              print(f"DNS OK: {host} -> {addresses}", flush=True)
+
+              with socket.create_connection((host, port), timeout=5):
+                  print(f"TCP OK: connected to {host}:{port}", flush=True)
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

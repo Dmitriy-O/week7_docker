@@ -1,0 +1,6 @@
+apiVersion: v2
+name: healthchecks
+description: Django Healthchecks application deployment
+type: application
+version: 0.1.0
+appVersion: "week8"

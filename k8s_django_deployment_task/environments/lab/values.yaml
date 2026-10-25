@@ -1,0 +1,17 @@
+image:
+  repository: 047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks
+  tag: week8-v1
+  pullPolicy: IfNotPresent
+
+databaseTLS:
+  enabled: true
+
+env:
+  DB_HOST: "week8-healthchecks.c6h4umui4kp1.us-east-1.rds.amazonaws.com"
+  DB_SSLMODE: "verify-full"
+  PGSSLROOTCERT: "/etc/rds-ca/us-east-1-bundle.pem"
+  ALLOWED_HOSTS: "localhost,127.0.0.1,healthchecks"
+  SITE_ROOT: "http://localhost:8090"
+
+autoscaling:
+  enabled: true

@@ -1,0 +1,7 @@
+NAME                        	NAMESPACE     	REVISION	UPDATED                             	STATUS  	CHART                              	APP VERSION
+aws-load-balancer-controller	kube-system   	3       	2026-10-25 23:40:27.991294 +0100 CET	deployed	aws-load-balancer-controller-1.14.0	v2.14.0
+cert-manager                	cert-manager  	2       	2026-10-25 23:40:28.014585 +0100 CET	deployed	cert-manager-v1.21.3               	v1.21.3
+healthchecks                	healthchecks  	3       	2026-10-25 23:40:56.771038 +0100 CET	deployed	healthchecks-0.1.0                 	week8
+healthchecks-migrations     	healthchecks  	3       	2026-10-25 23:40:27.49504 +0100 CET 	deployed	healthchecks-0.1.0                 	week8
+metrics-server              	kube-system   	3       	2026-10-25 23:40:27.661345 +0100 CET	deployed	metrics-server-3.14.0              	0.9.0
+traefik                     	ingress-system	2       	2026-10-25 23:40:48.601703 +0100 CET	deployed	traefik-42.1.3                     	v3.7.16

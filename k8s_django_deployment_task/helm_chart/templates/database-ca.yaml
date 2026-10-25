@@ -1,0 +1,10 @@
+{{- if .Values.databaseTLS.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-db-ca
+  namespace: {{ .Release.Namespace }}
+data:
+  us-east-1-bundle.pem: |
+    {{- .Files.Get "files/us-east-1-bundle.pem" | required "RDS CA bundle is missing from chart files/" | nindent 4 }}
+{{- end }}

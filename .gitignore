@@ -6,3 +6,22 @@
 __pycache__/
 *.py[cod]
 hc/local_settings.py
+
+# Terraform local data and plans
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/*.tfplan
+**/tfplan
+**/crash.log
+
+# Local secrets and backups
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.dec
+*.dec.*
+*.dump
+*.dump.age
+*.dump.age.partial

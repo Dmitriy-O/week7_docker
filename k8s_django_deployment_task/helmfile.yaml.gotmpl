@@ -1,0 +1,82 @@
+environments:
+  lab: {}
+
+---
+kubeContext: week8-healthchecks
+
+repositories:
+  - name: traefik
+    url: https://traefik.github.io/charts
+  - name: eks
+    url: https://aws.github.io/eks-charts
+  - name: metrics-server
+    url: https://kubernetes-sigs.github.io/metrics-server/
+
+helmDefaults:
+  wait: true
+  waitForJobs: true
+  timeout: 600
+  historyMax: 3
+  createNamespace: false
+
+releases:
+  - name: aws-load-balancer-controller
+    namespace: kube-system
+    chart: eks/aws-load-balancer-controller
+    version: "1.14.0"
+    values:
+      - environments/{{ .Environment.Name }}/aws-load-balancer-controller.yaml
+
+  - name: metrics-server
+    namespace: kube-system
+    chart: metrics-server/metrics-server
+    version: "3.14.0"
+    values:
+      - environments/{{ .Environment.Name }}/metrics-server.yaml
+
+  - name: healthchecks-migrations
+    namespace: healthchecks
+    chart: ./helm_chart
+    values:
+      - environments/{{ .Environment.Name }}/values.yaml
+      - environments/{{ .Environment.Name }}/ingress-values.yaml
+      - workload: migration
+    secrets:
+      - environments/{{ .Environment.Name }}/secrets.enc.yaml
+
+  - name: healthchecks
+    namespace: healthchecks
+    chart: ./helm_chart
+    needs:
+      - week8-healthchecks/healthchecks/healthchecks-migrations
+      - week8-healthchecks/kube-system/metrics-server
+      - week8-healthchecks/cert-manager/cert-manager
+      - week8-healthchecks/ingress-system/traefik
+    values:
+      - environments/{{ .Environment.Name }}/values.yaml
+      - environments/{{ .Environment.Name }}/ingress-values.yaml
+      - workload: web
+    secrets:
+      - environments/{{ .Environment.Name }}/secrets.enc.yaml
+
+  - name: traefik
+    namespace: ingress-system
+    createNamespace: true
+    chart: traefik/traefik
+    version: "42.1.3"
+    labels:
+      finish: task1
+    needs:
+      - week8-healthchecks/kube-system/aws-load-balancer-controller
+    values:
+      - environments/{{ .Environment.Name }}/traefik.yaml
+
+  - name: cert-manager
+    namespace: cert-manager
+    createNamespace: true
+    chart: oci://quay.io/jetstack/charts/cert-manager
+    version: "v1.21.3"
+    labels:
+      finish: task1
+    values:
+      - environments/{{ .Environment.Name }}/cert-manager.yaml

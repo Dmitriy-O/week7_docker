@@ -1,0 +1,35 @@
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if and (eq .Values.workload "web") ($ingress.enabled | default false) }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-letsencrypt
+  namespace: {{ .Release.Namespace }}
+spec:
+  acme:
+    server: {{ required "ingress.acmeServer is required" $ingress.acmeServer | quote }}
+    privateKeySecretRef:
+      name: {{ .Release.Name }}-acme-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
+            serviceType: ClusterIP
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}-tls
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: {{ .Release.Name }}-tls
+  dnsNames:
+    - {{ required "ingress.host is required" $ingress.host | quote }}
+  issuerRef:
+    name: {{ .Release.Name }}-letsencrypt
+    kind: Issuer
+  privateKey:
+    rotationPolicy: Always
+    algorithm: ECDSA
+    size: 256
+{{- end }}

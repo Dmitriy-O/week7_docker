@@ -1,0 +1,26 @@
+clusterName: week8-healthchecks
+region: us-east-1
+vpcId: vpc-0789e566b9d7b5cde
+
+replicaCount: 1
+
+image:
+  tag: v2.14.1
+
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+
+enableServiceMutatorWebhook: false
+
+featureGates:
+  ALBGatewayAPI: false
+  NLBGatewayAPI: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

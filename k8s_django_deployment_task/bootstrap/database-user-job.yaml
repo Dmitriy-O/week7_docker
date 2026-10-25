@@ -1,0 +1,144 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-user-bootstrap
+  namespace: healthchecks
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: bootstrap
+          image: 047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks:week8-v1
+          imagePullPolicy: IfNotPresent
+
+          envFrom:
+            - secretRef:
+                name: healthchecks-db-bootstrap
+
+          env:
+            - name: DB_HOST
+              value: week8-healthchecks.c6h4umui4kp1.us-east-1.rds.amazonaws.com
+
+          command: ["python", "-c"]
+          args:
+            - |
+              import os
+              from contextlib import closing
+
+              try:
+                  import psycopg as pg
+                  from psycopg import sql
+              except ImportError:
+                  import psycopg2 as pg
+                  from psycopg2 import sql
+
+              connection_options = {
+                  "host": os.environ["DB_HOST"],
+                  "port": 5432,
+                  "dbname": "hc",
+                  "sslmode": "verify-full",
+                  "sslrootcert": "/etc/rds-ca/us-east-1-bundle.pem",
+                  "connect_timeout": 5,
+              }
+
+              with closing(pg.connect(
+                  **connection_options,
+                  user=os.environ["ADMIN_USER"],
+                  password=os.environ["ADMIN_PASSWORD"],
+              )) as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute(
+                          "SELECT 1 FROM pg_roles WHERE rolname = %s",
+                          ("hc",),
+                      )
+                      action = "ALTER" if cursor.fetchone() else "CREATE"
+
+                      cursor.execute(
+                          sql.SQL(
+                              action + " ROLE {} LOGIN NOSUPERUSER "
+                              "NOCREATEDB NOCREATEROLE NOREPLICATION "
+                              "PASSWORD {}"
+                          ).format(
+                              sql.Identifier("hc"),
+                              sql.Literal(os.environ["APP_PASSWORD"]),
+                          )
+                      )
+
+                      cursor.execute(
+                          "GRANT CONNECT ON DATABASE hc TO hc"
+                      )
+                      cursor.execute(
+                          "GRANT USAGE, CREATE ON SCHEMA public TO hc"
+                      )
+
+                  connection.commit()
+
+              print("ROLE OK: hc configured", flush=True)
+
+              with closing(pg.connect(
+                  **connection_options,
+                  user="hc",
+                  password=os.environ["APP_PASSWORD"],
+              )) as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute("""
+                          SELECT
+                              current_user,
+                              current_database(),
+                              has_schema_privilege(
+                                  current_user, 'public', 'CREATE'
+                              ),
+                              (
+                                  SELECT ssl
+                                  FROM pg_stat_ssl
+                                  WHERE pid = pg_backend_pid()
+                              )
+                      """)
+                      user, database, can_create, tls = cursor.fetchone()
+
+                      if not can_create or not tls:
+                          raise RuntimeError(
+                              "Schema permissions or TLS check failed"
+                          )
+
+                      print(
+                          f"SQL OK: user={user}, database={database}, "
+                          f"schema_create={can_create}, TLS={tls}",
+                          flush=True,
+                      )
+
+          volumeMounts:
+            - name: rds-ca
+              mountPath: /etc/rds-ca
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: rds-ca
+          configMap:
+            name: healthchecks-rds-ca

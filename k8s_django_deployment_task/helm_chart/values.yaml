@@ -1,0 +1,53 @@
+workload: web
+
+migration:
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+replicaCount: 2
+
+image:
+  repository: healthchecks
+  tag: week8-local
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+service:
+  port: 80
+
+databaseTLS:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+env:
+  DJANGO_SETTINGS_MODULE: "hc.settings_kubernetes"
+  DEBUG: "False"
+  DB: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "hc"
+  DB_USER: "hc"
+  DB_CONNECT_TIMEOUT: "3"
+  DB_CONN_MAX_AGE: "0"
+  DB_SSLMODE: "require"
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
