@@ -1,0 +1,32 @@
+services:
+  migrate:
+    image: healthchecks:week8-local
+    environment:
+      DJANGO_SETTINGS_MODULE: hc.settings_kubernetes
+      DB_CONNECT_TIMEOUT: "3"
+
+  web:
+    image: healthchecks:week8-local
+    environment:
+      DJANGO_SETTINGS_MODULE: hc.settings_kubernetes
+      DB_CONNECT_TIMEOUT: "3"
+      SITE_ROOT: http://localhost:8080
+    command:
+      - gunicorn
+      - hc.wsgi:application
+      - --bind=0.0.0.0:8080
+      - --workers=2
+      - --access-logfile=-
+      - --error-logfile=-
+    ports: !override
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready/', timeout=4).close()"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s

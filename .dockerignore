@@ -39,3 +39,8 @@ requirements-dev.txt
 /docker-compose.yaml
 
 /README-week7.md
+
+# Week 8 local configuration and deployment manifests
+/compose.week8.yaml
+/docker-compose.networking.yaml
+/k8s_django_deployment_task/
