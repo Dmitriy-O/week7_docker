@@ -1,6 +1,6 @@
 clusterName: week8-healthchecks
 region: us-east-1
-vpcId: vpc-0789e566b9d7b5cde
+vpcId: "vpc-08a85bbb8af9c7845"
 
 replicaCount: 1
 

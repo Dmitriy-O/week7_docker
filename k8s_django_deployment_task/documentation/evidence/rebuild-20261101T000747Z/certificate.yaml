@@ -1,0 +1,37 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  annotations:
+    meta.helm.sh/release-name: healthchecks
+    meta.helm.sh/release-namespace: healthchecks
+  creationTimestamp: "2026-11-01T00:03:32Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: healthchecks-tls
+  namespace: healthchecks
+  resourceVersion: "22349"
+  uid: 47e4186f-119f-4875-9566-608113e5a488
+spec:
+  dnsNames:
+  - healthchecks.100-60-48-72.sslip.io
+  issuerRef:
+    kind: Issuer
+    name: healthchecks-letsencrypt
+  privateKey:
+    algorithm: ECDSA
+    rotationPolicy: Always
+    size: 256
+  secretName: healthchecks-tls
+status:
+  conditions:
+  - lastTransitionTime: "2026-11-01T00:03:58Z"
+    message: Certificate is up to date and has not expired
+    observedGeneration: 1
+    reason: Ready
+    status: "True"
+    type: Ready
+  notAfter: "2027-01-29T23:05:25Z"
+  notBefore: "2026-10-31T23:05:26Z"
+  renewalTime: "2026-12-30T23:05:25Z"
+  revision: 1

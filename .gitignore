@@ -25,3 +25,27 @@ hc/local_settings.py
 *.dump
 *.dump.age
 *.dump.age.partial
+
+# Week 8 local artifacts
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+*.dec
+*.dec.*
+*.dump
+*.dump.age
+*.dump.age.partial
+*.backup
+*.bak
+.DS_Store
+
+# Local credentials and private keys
+.aws/
+.kube/
+.config/sops/age/
+.env
+.env.*
+!.env.example

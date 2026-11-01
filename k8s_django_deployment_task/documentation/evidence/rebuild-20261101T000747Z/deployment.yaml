@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    meta.helm.sh/release-name: healthchecks
+    meta.helm.sh/release-namespace: healthchecks
+  creationTimestamp: "2026-11-01T00:03:32Z"
+  generation: 2
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: healthchecks
+  namespace: healthchecks
+  resourceVersion: "22302"
+  uid: e92ffeea-aec3-40d4-86be-75556f0dc4a5
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: healthchecks
+      app.kubernetes.io/name: healthchecks
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/config: df707aacbdfeb102e4fc172849d8f88ecf89a6aa7d8dc1803230f6f82963bd8c
+        checksum/database-ca: f8f0717a1f5838f91ac47f0131ce6bc999b68f8533880651094081f9cef2edf7
+        checksum/secrets: 5a653ec874a6c663095fa0e11f7d473c14d114f564c1ec53c01b4e3be8685e5a
+      labels:
+        app.kubernetes.io/instance: healthchecks
+        app.kubernetes.io/name: healthchecks
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - hc.wsgi:application
+        - --bind=0.0.0.0:8080
+        - --workers=2
+        - --access-logfile=-
+        - --error-logfile=-
+        command:
+        - gunicorn
+        envFrom:
+        - configMapRef:
+            name: healthchecks-config
+        - secretRef:
+            name: healthchecks-secrets
+        image: 047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks:week8-v1
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/live/
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 3
+        name: web
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/ready/
+            port: http
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: "1"
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /health/live/
+            port: http
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/rds-ca
+          name: database-ca
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 40
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: healthchecks-db-ca
+        name: database-ca
+status:
+  availableReplicas: 2
+  conditions:
+  - lastTransitionTime: "2026-11-01T00:03:32Z"
+    lastUpdateTime: "2026-11-01T00:03:38Z"
+    message: ReplicaSet "healthchecks-7f7cb76f46" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  - lastTransitionTime: "2026-11-01T00:03:53Z"
+    lastUpdateTime: "2026-11-01T00:03:53Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 2
+  readyReplicas: 2
+  replicas: 2
+  terminatingReplicas: 0
+  updatedReplicas: 2

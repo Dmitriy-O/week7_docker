@@ -1,6 +1,6 @@
 image:
-  repository: 047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks
-  tag: week8-v1
+  repository: "047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks"
+  tag: "week8-v1"
   pullPolicy: IfNotPresent
 
 databaseTLS:

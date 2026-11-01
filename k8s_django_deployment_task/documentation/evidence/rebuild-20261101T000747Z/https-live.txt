@@ -1,0 +1,2 @@
+{"status": "alive"}
+HTTP 200

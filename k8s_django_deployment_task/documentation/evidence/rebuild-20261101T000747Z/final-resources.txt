@@ -1,0 +1,14 @@
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/healthchecks   2/2     2            2           4m18s
+
+NAME                   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)   AGE
+service/healthchecks   ClusterIP   172.20.207.183   <none>        80/TCP    4m18s
+
+NAME                                     CLASS     HOSTS                                ADDRESS                                                           PORTS     AGE
+ingress.networking.k8s.io/healthchecks   traefik   healthchecks.100-60-48-72.sslip.io   week8-healthchecks-71fecab632b76b65.elb.us-east-1.amazonaws.com   80, 443   4m18s
+
+NAME                                               REFERENCE                 TARGETS                        MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/healthchecks   Deployment/healthchecks   cpu: 1%/80%, memory: 57%/80%   2         4         2          4m18s
+
+NAME                                           READY   SECRET             AGE
+certificate.cert-manager.io/healthchecks-tls   True    healthchecks-tls   4m18s

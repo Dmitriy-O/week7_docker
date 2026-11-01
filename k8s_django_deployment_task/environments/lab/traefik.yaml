@@ -32,7 +32,7 @@ service:
     service.beta.kubernetes.io/aws-load-balancer-name: "week8-healthchecks"
     service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
-    service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-0cb933ee0515a2f08,subnet-061d8955a3757f80f"
+    service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-07ca555e8157e5a2c,subnet-077d57e71c004387e"
     service.beta.kubernetes.io/aws-load-balancer-attributes: "load_balancing.cross_zone.enabled=true"
     service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "Project=week8-healthchecks,Environment=lab"
 
