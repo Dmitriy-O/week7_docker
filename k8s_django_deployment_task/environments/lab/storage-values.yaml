@@ -1,0 +1,6 @@
+persistence:
+  enabled: true
+  storageClassName: week8-healthchecks-efs
+  volumeName: week8-healthchecks-static
+  claimName: healthchecks-static
+  volumeHandle: "fs-02e59279a87a7ee9c::fsap-03fafd766a4266ae5"

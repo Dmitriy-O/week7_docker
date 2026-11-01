@@ -34,6 +34,13 @@ spec:
     spec:
       terminationGracePeriodSeconds: 40
       automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
 
       securityContext:
         runAsNonRoot: true
@@ -65,11 +72,19 @@ spec:
             - secretRef:
                 name: {{ .Release.Name }}-secrets
 
-          {{- if .Values.databaseTLS.enabled }}
+          {{- if or .Values.databaseTLS.enabled .Values.persistence.enabled }}
           volumeMounts:
+            {{- if .Values.databaseTLS.enabled }}
             - name: database-ca
               mountPath: /etc/rds-ca
               readOnly: true
+            {{- end }}
+            {{- if .Values.persistence.enabled }}
+            - name: static
+              mountPath: /app/static-collected
+              subPath: {{ printf "releases/%s" .Values.image.tag | quote }}
+              readOnly: true
+            {{- end }}
           {{- end }}
 
           startupProbe:
@@ -105,10 +120,17 @@ spec:
               drop:
                 - ALL
 
-      {{- if .Values.databaseTLS.enabled }}
+      {{- if or .Values.databaseTLS.enabled .Values.persistence.enabled }}
       volumes:
+        {{- if .Values.databaseTLS.enabled }}
         - name: database-ca
           configMap:
             name: {{ .Release.Name }}-db-ca
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        - name: static
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.claimName }}
+        {{- end }}
       {{- end }}
 {{- end }}

@@ -1,3 +1,4 @@
+{{- if ne .Values.workload "storage" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,3 +8,4 @@ data:
   {{- range $key, $value := .Values.env }}
   {{ $key }}: {{ $value | toString | quote }}
   {{- end }}
+{{- end }}

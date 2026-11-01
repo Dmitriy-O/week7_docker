@@ -1,3 +1,4 @@
+{{- if ne .Values.workload "storage" }}
 {{- if .Values.databaseTLS.enabled }}
 apiVersion: v1
 kind: ConfigMap
@@ -7,4 +8,5 @@ metadata:
 data:
   us-east-1-bundle.pem: |
     {{- .Files.Get "files/us-east-1-bundle.pem" | required "RDS CA bundle is missing from chart files/" | nindent 4 }}
+{{- end }}
 {{- end }}

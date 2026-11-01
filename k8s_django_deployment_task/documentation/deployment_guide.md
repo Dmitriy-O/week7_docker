@@ -116,3 +116,28 @@ Recreate the application database role using the existing encrypted application 
 Restore the encrypted database dump if preserving data, or run migrations for a clean lab.
 Update environment values and regenerate the temporary hostname for the new NLB.
 Deploy with Helmfile and repeat database, health, certificate and HPA checks.
+
+## Task 2: EFS-backed static files
+
+1. Increased node-group capacity to three t4g.small workers because
+   the original 22 Pod slots were insufficient for CSI components,
+   application scaling and temporary deployment workloads.
+2. Added terraform/storage.tf for EFS, private mount targets,
+   NFS security-group access, the Access Point and EFS CSI add-on.
+3. Added storage-class.yaml, pv.yaml, pvc.yaml and static-seed-job.yaml.
+4. Added the healthchecks-storage Helmfile release and made the web
+   release depend on its successful completion.
+5. Mounted releases/<image-tag> at /app/static-collected read-only.
+6. Verified the same marker and CSS hash in replicas on different
+   nodes, replaced the web Pods, and verified persistence and HTTPS.
+
+Deployment commands:
+terraform -chdir=k8s_django_deployment_task/terraform plan
+terraform -chdir=k8s_django_deployment_task/terraform apply
+helmfile -f k8s_django_deployment_task/helmfile.yaml.gotmpl -e lab lint
+helmfile -f k8s_django_deployment_task/helmfile.yaml.gotmpl -e lab sync
+
+The PV/PVC use static binding. The declared 5Gi is not an EFS quota.
+Retain and Helm keep annotations preserve storage objects during
+release removal; they do not protect EFS from Terraform destruction.
+EFS and the additional EC2 worker incur ongoing AWS charges.

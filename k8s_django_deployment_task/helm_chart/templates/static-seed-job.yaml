@@ -1,0 +1,68 @@
+{{- if and (eq .Values.workload "storage") .Values.persistence.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-seed-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: STATIC_VERSION
+              value: {{ .Values.image.tag | quote }}
+          command: [python, -c]
+          args:
+            - |
+              import fcntl, os, pathlib, re, shutil, uuid
+              version = os.environ["STATIC_VERSION"]
+              assert re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", version)
+              src = pathlib.Path("/app/static-collected")
+              assert src.is_dir() and any(src.rglob("*.css")), "Static CSS is missing"
+              root = pathlib.Path("/persistent/releases")
+              root.mkdir(parents=True, exist_ok=True)
+              dst = root / version
+              with (root / ".seed.lock").open("a") as lock:
+                  fcntl.flock(lock, fcntl.LOCK_EX)
+                  if not (dst / ".seed-complete").exists():
+                      assert not dst.exists(), "Incomplete release directory exists"
+                      tmp = root / (".copy-" + uuid.uuid4().hex)
+                      shutil.copytree(src, tmp)
+                      (tmp / ".persistence-proof").write_text(uuid.uuid4().hex)
+                      (tmp / ".seed-complete").write_text(version)
+                      os.rename(tmp, dst)
+              print("STATIC READY:", version)
+              print("PERSISTENCE PROOF:", (dst / ".persistence-proof").read_text())
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: static
+              mountPath: /persistent
+      volumes:
+        - name: static
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.claimName }}
+{{- end }}

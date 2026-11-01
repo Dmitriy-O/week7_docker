@@ -48,13 +48,13 @@ module "eks" {
       name                           = "${local.project_name}-application"
       iam_role_name                  = "${local.project_name}-nodes"
       ami_type                       = "AL2023_ARM_64_STANDARD"
-      instance_types = ["t4g.small"]
+      instance_types                 = ["t4g.small"]
       capacity_type                  = "ON_DEMAND"
       use_latest_ami_release_version = false
 
       min_size     = 2
-      max_size     = 2
-      desired_size = 2
+      max_size     = 3
+      desired_size = 3
 
       block_device_mappings = {
         root = {

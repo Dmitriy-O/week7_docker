@@ -1,0 +1,45 @@
+{
+  "before": [
+    {
+      "proof": "f7c75bb67c314c16aa96fb22662efaae",
+      "css": "CACHE/css/output.34a39ad1d18f.css",
+      "sha256": "34a39ad1d18f3f3723f46190a65f59391cd66fe0751e5c0ac784e0e86b12877f",
+      "pod": "healthchecks-7b6d5f7865-77k7t",
+      "uid": "e67e1da9-cf7b-426f-a15d-aafb9f24ee4c",
+      "node": "ip-10-80-24-90.ec2.internal"
+    },
+    {
+      "proof": "f7c75bb67c314c16aa96fb22662efaae",
+      "css": "CACHE/css/output.34a39ad1d18f.css",
+      "sha256": "34a39ad1d18f3f3723f46190a65f59391cd66fe0751e5c0ac784e0e86b12877f",
+      "pod": "healthchecks-7b6d5f7865-r7ktn",
+      "uid": "380fc981-3f44-4a41-9e8c-01f75334c3af",
+      "node": "ip-10-80-33-236.ec2.internal"
+    }
+  ],
+  "after": [
+    {
+      "proof": "f7c75bb67c314c16aa96fb22662efaae",
+      "css": "CACHE/css/output.34a39ad1d18f.css",
+      "sha256": "34a39ad1d18f3f3723f46190a65f59391cd66fe0751e5c0ac784e0e86b12877f",
+      "pod": "healthchecks-54999847b7-6pl77",
+      "uid": "d969f7cb-c72e-4a80-bee3-f03de280b118",
+      "node": "ip-10-80-33-236.ec2.internal"
+    },
+    {
+      "proof": "f7c75bb67c314c16aa96fb22662efaae",
+      "css": "CACHE/css/output.34a39ad1d18f.css",
+      "sha256": "34a39ad1d18f3f3723f46190a65f59391cd66fe0751e5c0ac784e0e86b12877f",
+      "pod": "healthchecks-54999847b7-wsv6t",
+      "uid": "ffa58d96-cb61-47ea-9191-d50fe54c844a",
+      "node": "ip-10-80-33-223.ec2.internal"
+    }
+  ],
+  "https": {
+    "/health/live/": 200,
+    "/health/ready/": 200,
+    "/static/CACHE/css/output.34a39ad1d18f.css": 200
+  },
+  "pv": "week8-healthchecks-static",
+  "volumeHandle": "fs-02e59279a87a7ee9c::fsap-03fafd766a4266ae5"
+}

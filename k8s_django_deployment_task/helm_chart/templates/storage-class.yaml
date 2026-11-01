@@ -1,0 +1,13 @@
+{{- if and (eq .Values.workload "storage") .Values.persistence.enabled }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.persistence.storageClassName }}
+  annotations:
+    helm.sh/resource-policy: keep
+provisioner: efs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+mountOptions:
+  - tls
+{{- end }}

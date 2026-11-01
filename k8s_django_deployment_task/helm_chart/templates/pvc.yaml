@@ -1,0 +1,17 @@
+{{- if and (eq .Values.workload "storage") .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.persistence.claimName }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteMany]
+  volumeMode: Filesystem
+  storageClassName: {{ .Values.persistence.storageClassName }}
+  volumeName: {{ .Values.persistence.volumeName }}
+  resources:
+    requests:
+      storage: 5Gi
+{{- end }}

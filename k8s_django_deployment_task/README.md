@@ -30,9 +30,25 @@ See documentation/evidence/ and documentation/deployment_guide.md.
 
 ## Scope
 
-This directory covers Task 1. Persistent storage for static files belongs to Task 2.
+This directory covers Tasks 1 and 2.
 
 ## Security
 
 Never commit Terraform state, saved plans, decrypted secrets, database dumps,
 AWS credentials or the private age key.
+
+## Task 2: persistent static storage
+
+Terraform provisions encrypted Amazon EFS, mount targets in both
+Availability Zones, an Access Point for UID/GID 10001, and the EFS CSI
+EKS add-on with Pod Identity.
+
+The chart defines an explicit StorageClass, PV and RWX PVC.
+The healthchecks-storage release seeds versioned static files from
+the application image before the web release starts.
+
+Web replicas mount the prepared static directory read-only.
+Verification records file hashes and a persistent marker across
+different nodes and a complete replacement of the web Pods.
+
+Evidence: documentation/evidence/task2-*/persistence-verification.json.

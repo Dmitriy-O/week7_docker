@@ -1,0 +1,22 @@
+{{- if and (eq .Values.workload "storage") .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.persistence.volumeName }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.persistence.storageClassName }}
+  claimRef:
+    namespace: {{ .Release.Namespace }}
+    name: {{ .Values.persistence.claimName }}
+  mountOptions: [tls]
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: {{ required "EFS volume handle is required" .Values.persistence.volumeHandle | quote }}
+{{- end }}
