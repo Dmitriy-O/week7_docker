@@ -16,6 +16,27 @@ In this project, Django's CSS, JavaScript and other static assets are prepared i
 
 The database is a separate concern. PostgreSQL data stays in RDS; the Kubernetes volume in this task stores static files, not database files.
 
+flowchart TD
+    subgraph EKS["Amazon EKS cluster"]
+        subgraph NS["Namespace: healthchecks"]
+            A["Django Pod 1"]
+            B["Django Pod 2"]
+            C["PVC: healthchecks-static"]
+            A --> C
+            B --> C
+        end
+        D["PV: week8-healthchecks-static"]
+        S["StorageClass: week8-healthchecks-efs"]
+        N["EFS CSI node plugin / kube-system"]
+        C -->|Bound| D
+        C -. storageClassName .-> S
+        D -. storageClassName .-> S
+        D --> N
+    end
+    N -->|TLS| M["EFS mount targets / private subnets"]
+    M --> P["EFS access point: /healthchecks-static"]
+    P --> F["Shared static files: releases/week8-v1"]
+
 ## Storage concepts
 
 | Concept | Meaning | Resource used here |
@@ -243,11 +264,3 @@ These tools also introduced operational overhead. I had to understand driver per
 | Learn PV, PVC and StorageClass concepts. | Definitions and their roles are explained in this guide. |
 | Explain how the resources work together. | The storage flow, binding and static provisioning approach are described above. |
 | Create a PV and attach it to application Pods for static files. | The Helm-managed EFS PV and Bound PVC are deployed; the web Deployment mounts the claim for static files. Both application replicas are Ready. The before/after replacement test passed on distinct nodes, and the static CSS served over HTTPS matched the EFS file. |
-
-## References
-
-- [Kubernetes: Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
-- [Kubernetes: Storage Classes](https://kubernetes.io/docs/concepts/storage/storage-classes/)
-- [Amazon EKS: Use elastic file system storage with Amazon EFS](https://docs.aws.amazon.com/eks/latest/userguide/efs-csi.html)
-- [Amazon EFS: Working with access points](https://docs.aws.amazon.com/efs/latest/ug/efs-access-points.html)
-
