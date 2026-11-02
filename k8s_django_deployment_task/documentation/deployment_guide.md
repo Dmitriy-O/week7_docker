@@ -16,6 +16,21 @@ In this project, Django's CSS, JavaScript and other static assets are prepared i
 
 The database is a separate concern. PostgreSQL data stays in RDS; the Kubernetes volume in this task stores static files, not database files.
 
+## Storage concepts
+
+| Concept | Meaning | Resource used here |
+| --- | --- | --- |
+| PersistentVolume, or PV | A cluster-scoped Kubernetes resource describing available persistent storage. | `week8-healthchecks-static`, referencing EFS through its CSI driver. |
+| PersistentVolumeClaim, or PVC | A namespaced request for storage that binds to a suitable PV. | `healthchecks-static` in the `healthchecks` namespace. |
+| StorageClass | A cluster-scoped description of a storage class and its provisioner. It can support automatic provisioning when configured for that purpose. | `week8-healthchecks-efs`, with provisioner `efs.csi.aws.com`. |
+| CSI driver | The integration that allows Kubernetes to use an external storage system. | The Amazon EFS CSI driver installed as an EKS add-on. |
+| EFS access point | An application-specific entry point into EFS, with a selected directory and POSIX identity. | The application's static directory, accessed as UID/GID `10001`. |
+
+A Pod references a PVC in its namespace. The PVC binds to a PV, and the CSI driver mounts the backing storage on the node for the Pod to use. In our chart, both the PV's claim reference and the PVC's volume name are specified explicitly.
+
+### Storage architecture
+
+```mermaid
 flowchart TD
     subgraph EKS["Amazon EKS cluster"]
         subgraph NS["Namespace: healthchecks"]
@@ -36,18 +51,9 @@ flowchart TD
     N -->|TLS| M["EFS mount targets / private subnets"]
     M --> P["EFS access point: /healthchecks-static"]
     P --> F["Shared static files: releases/week8-v1"]
+```
 
-## Storage concepts
-
-| Concept | Meaning | Resource used here |
-| --- | --- | --- |
-| PersistentVolume, or PV | A cluster-scoped Kubernetes resource describing available persistent storage. | `week8-healthchecks-static`, referencing EFS through its CSI driver. |
-| PersistentVolumeClaim, or PVC | A namespaced request for storage that binds to a suitable PV. | `healthchecks-static` in the `healthchecks` namespace. |
-| StorageClass | A cluster-scoped description of a storage class and its provisioner. It can support automatic provisioning when configured for that purpose. | `week8-healthchecks-efs`, with provisioner `efs.csi.aws.com`. |
-| CSI driver | The integration that allows Kubernetes to use an external storage system. | The Amazon EFS CSI driver installed as an EKS add-on. |
-| EFS access point | An application-specific entry point into EFS, with a selected directory and POSIX identity. | The application's static directory, accessed as UID/GID `10001`. |
-
-A Pod references a PVC in its namespace. The PVC binds to a PV, and the CSI driver mounts the backing storage on the node for the Pod to use. In our chart, both the PV's claim reference and the PVC's volume name are specified explicitly.
+Both web Pods use the same claim. The PVC is namespaced, while the PV and StorageClass are cluster-scoped. The EFS CSI node plugin mounts the storage through a private mount target and the application access point. The web containers see their versioned static directory at `/app/static-collected`.
 
 ### Static provisioning in this project
 
