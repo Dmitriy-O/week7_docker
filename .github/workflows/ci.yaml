@@ -1,0 +1,111 @@
+name: Helm security CI
+
+on:
+  pull_request:
+  push:
+    branches: [task-9/kubernetes-security]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  helm-security:
+    name: Helm security checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    env:
+      KUBERNETES_VERSION: "1.36.0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install YAML parser
+        run: python -m pip install PyYAML==6.0.3
+
+      - name: Check SOPS encryption
+        run: python ci/check-sops.py
+
+      - name: Set up Helm 3
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Helm lint and render all environments
+        run: bash ci/render-chart.sh
+
+      - name: Install kubeconform
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/kubeconform.tar.gz"
+
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" \
+            -C "$RUNNER_TEMP" kubeconform
+
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Prepare cert-manager schemas
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/cert-manager/cert-manager/releases/download/v1.21.3/cert-manager.crds.yaml \
+            --output "$RUNNER_TEMP/cert-manager.crds.yaml"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import yaml
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          source = root / "cert-manager.crds.yaml"
+
+          for crd in yaml.safe_load_all(source.read_text()):
+              if not crd:
+                  continue
+
+              spec = crd["spec"]
+              folder = root / "schemas" / spec["group"]
+              folder.mkdir(parents=True, exist_ok=True)
+
+              for version in spec["versions"]:
+                  kind = spec["names"]["kind"].lower()
+                  filename = f'{kind}_{version["name"]}.json'
+                  schema = version["schema"]["openAPIV3Schema"]
+
+                  (folder / filename).write_text(json.dumps(schema))
+          PY
+
+      - name: Validate Kubernetes manifest schemas
+        run: |
+          kubeconform -strict -summary \
+            -kubernetes-version "$KUBERNETES_VERSION" \
+            -schema-location default \
+            -schema-location "$RUNNER_TEMP/schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+            "$RUNNER_TEMP/healthchecks-rendered/"
+
+      - name: Install Helm unit tests plugin
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest \
+            --version v1.2.0
+
+      - name: Run Helm unit tests
+        run: helm unittest --strict k8s_django_deployment_task/helm_chart
+
+      - name: Scan rendered manifests with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: config
+          scan-ref: ${{ runner.temp }}/healthchecks-rendered
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
