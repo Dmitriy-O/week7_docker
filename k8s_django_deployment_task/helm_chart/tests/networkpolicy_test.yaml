@@ -1,0 +1,101 @@
+suite: Web network isolation checks
+templates:
+  - templates/networkpolicy.yaml
+release:
+  name: healthchecks
+  namespace: healthchecks
+set:
+  workload: web
+  networkPolicy.enabled: true
+  networkPolicy.ingressNamespace: ingress-system
+  networkPolicy.ingressPodLabels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-ingress-system
+  networkPolicy.databaseCIDRs:
+    - 10.80.240.0/24
+    - 10.80.241.0/24
+tests:
+  - it: renders no policy when disabled
+    set:
+      networkPolicy.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: does not create a web policy in the migration release
+    set:
+      workload: migration
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: does not create a web policy in the storage release
+    set:
+      workload: storage
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: selects the application while excluding the test pod
+    asserts:
+      - equal:
+          path: spec.podSelector
+          value:
+            matchLabels:
+              app.kubernetes.io/name: healthchecks
+              app.kubernetes.io/instance: healthchecks
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: NotIn
+                values: [test]
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress, Egress]
+
+  - it: permits only the ingress controller and release test on HTTP
+    asserts:
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: ingress-system
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: traefik
+                      app.kubernetes.io/instance: traefik-ingress-system
+                - podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: healthchecks
+                      app.kubernetes.io/instance: healthchecks
+                      app.kubernetes.io/component: test
+              ports:
+                - protocol: TCP
+                  port: http
+
+  - it: permits only cluster DNS and the database subnets on PostgreSQL
+    asserts:
+      - equal:
+          path: spec.egress
+          value:
+            - to:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: kube-system
+                  podSelector:
+                    matchLabels:
+                      k8s-app: kube-dns
+              ports:
+                - protocol: UDP
+                  port: 53
+                - protocol: TCP
+                  port: 53
+            - to:
+                - ipBlock:
+                    cidr: 10.80.240.0/24
+                - ipBlock:
+                    cidr: 10.80.241.0/24
+              ports:
+                - protocol: TCP
+                  port: 5432

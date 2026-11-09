@@ -33,6 +33,7 @@ spec:
 
     spec:
       terminationGracePeriodSeconds: 40
+      serviceAccountName: {{ .Release.Name }}
       automountServiceAccountToken: false
       topologySpreadConstraints:
         - maxSkew: 1
@@ -59,6 +60,7 @@ spec:
             - hc.wsgi:application
             - --bind=0.0.0.0:{{ .Values.containerPort }}
             - --workers=2
+            - --worker-tmp-dir=/tmp
             - --access-logfile=-
             - --error-logfile=-
 
@@ -72,8 +74,9 @@ spec:
             - secretRef:
                 name: {{ .Release.Name }}-secrets
 
-          {{- if or .Values.databaseTLS.enabled .Values.persistence.enabled }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             {{- if .Values.databaseTLS.enabled }}
             - name: database-ca
               mountPath: /etc/rds-ca
@@ -85,7 +88,6 @@ spec:
               subPath: {{ printf "releases/%s" .Values.image.tag | quote }}
               readOnly: true
             {{- end }}
-          {{- end }}
 
           startupProbe:
             httpGet:
@@ -115,13 +117,16 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
 
           securityContext:
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
                 - ALL
 
-      {{- if or .Values.databaseTLS.enabled .Values.persistence.enabled }}
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.runtime.tmpSizeLimit | quote }}
         {{- if .Values.databaseTLS.enabled }}
         - name: database-ca
           configMap:
@@ -132,5 +137,4 @@ spec:
           persistentVolumeClaim:
             claimName: {{ .Values.persistence.claimName }}
         {{- end }}
-      {{- end }}
 {{- end }}

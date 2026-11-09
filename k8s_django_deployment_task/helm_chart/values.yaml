@@ -1,5 +1,8 @@
 workload: web
 
+runtime:
+  tmpSizeLimit: 64Mi
+
 migration:
   activeDeadlineSeconds: 300
   ttlSecondsAfterFinished: 86400
@@ -51,5 +54,6 @@ autoscaling:
   maxReplicas: 4
   targetCPUUtilizationPercentage: 80
   targetMemoryUtilizationPercentage: 80
+
 persistence:
   enabled: false

@@ -11,6 +11,7 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      serviceAccountName: {{ .Release.Name }}
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -55,13 +56,19 @@ spec:
               cpu: 500m
               memory: 256Mi
           securityContext:
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: static
               mountPath: /persistent
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.runtime.tmpSizeLimit | quote }}
         - name: static
           persistentVolumeClaim:
             claimName: {{ .Values.persistence.claimName }}

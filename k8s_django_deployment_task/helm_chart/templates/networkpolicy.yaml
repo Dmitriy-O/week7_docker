@@ -1,0 +1,58 @@
+{{- $policy := .Values.networkPolicy | default dict -}}
+{{- if and (eq .Values.workload "web") ($policy.enabled | default false) }}
+{{- $databaseCIDRs := required "networkPolicy.databaseCIDRs is required" $policy.databaseCIDRs }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-web
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: NotIn
+        values: [test]
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ required "networkPolicy.ingressNamespace is required" $policy.ingressNamespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml (required "networkPolicy.ingressPodLabels is required" $policy.ingressPodLabels) | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: test
+      ports:
+        - protocol: TCP
+          port: http
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        {{- range $databaseCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.env.DB_PORT | int }}
+{{- end }}

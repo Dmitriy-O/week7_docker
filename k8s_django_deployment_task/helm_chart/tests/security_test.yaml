@@ -1,0 +1,99 @@
+suite: Workload security regression checks
+
+templates:
+  - templates/deployment.yaml
+  - templates/migration-job.yaml
+  - templates/static-seed-job.yaml
+  - templates/configmap.yaml
+  - templates/secret.yaml
+  - templates/database-ca.yaml
+
+release:
+  name: healthchecks
+  namespace: healthchecks
+
+set:
+  secrets.DB_PASSWORD: render-only
+  secrets.SECRET_KEY: render-only
+  persistence.storageClassName: test-efs
+  persistence.volumeName: test-static
+  persistence.claimName: test-static
+  persistence.volumeHandle: fs-test::fsap-test
+
+tests:
+  - it: hardens the web container and uses the dedicated account
+    template: templates/deployment.yaml
+    set:
+      workload: web
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: healthchecks
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.securityContext.seccompProfile.type
+          value: RuntimeDefault
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tmp
+            emptyDir:
+              sizeLimit: 64Mi
+
+  - it: applies the same container restrictions to migrations
+    template: templates/migration-job.yaml
+    set:
+      workload: migration
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: healthchecks
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+
+  - it: protects seed root while preserving writable EFS
+    template: templates/static-seed-job.yaml
+    set:
+      workload: storage
+      persistence.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: healthchecks
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: static
+            mountPath: /persistent
+      - notExists:
+          path: spec.template.spec.containers[0].volumeMounts[1].readOnly

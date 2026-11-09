@@ -1,0 +1,57 @@
+{{- if eq .Values.workload "web" }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-test-connection
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: test
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 60
+  serviceAccountName: {{ .Release.Name }}
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: http-check
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      command: ["python", "-c"]
+      args:
+        - |
+          import urllib.request
+          url = "http://{{ .Release.Name }}:{{ .Values.service.port }}/health/ready/"
+          with urllib.request.urlopen(url, timeout=10) as response:
+              if response.status != 200:
+                  raise SystemExit("Readiness HTTP check failed")
+              print("HTTP CHECK OK:", response.status)
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 32Mi
+        limits:
+          cpu: 250m
+          memory: 128Mi
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: tmp
+      emptyDir:
+        sizeLimit: {{ .Values.runtime.tmpSizeLimit | quote }}
+{{- end }}

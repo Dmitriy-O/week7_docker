@@ -1,0 +1,14 @@
+# Negative admission test: use only with --dry-run=server.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: psa-denied-check
+  namespace: healthchecks
+spec:
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: 047472448571.dkr.ecr.us-east-1.amazonaws.com/week8-healthchecks:week8-v1
+      command: ["python", "-c", "print('SHOULD_NOT_RUN')"]
+      securityContext:
+        privileged: true

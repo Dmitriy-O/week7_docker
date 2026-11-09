@@ -15,6 +15,15 @@ spec:
           ingress:
             ingressClassName: traefik
             serviceType: ClusterIP
+            podTemplate:
+              spec:
+                serviceAccountName: {{ .Release.Name }}
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 10001
+                  runAsGroup: 10001
+                  seccompProfile:
+                    type: RuntimeDefault
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

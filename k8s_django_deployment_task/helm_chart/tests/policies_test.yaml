@@ -1,0 +1,76 @@
+suite: Namespace and access policy checks
+
+templates:
+  - templates/ns.yaml
+  - templates/rbac.yaml
+  - templates/certificate.yaml
+  - templates/tests/test-connection.yaml
+
+release:
+  name: healthchecks
+  namespace: healthchecks
+
+set:
+  workload: web
+  ingress.enabled: true
+  ingress.host: healthchecks.example.test
+  ingress.acmeServer: https://acme-staging-v02.api.letsencrypt.org/directory
+
+tests:
+  - it: enforces the pinned restricted policy
+    template: templates/ns.yaml
+    asserts:
+      - equal:
+          path: metadata.labels["pod-security.kubernetes.io/enforce"]
+          value: restricted
+      - equal:
+          path: metadata.labels["pod-security.kubernetes.io/enforce-version"]
+          value: v1.36
+
+  - it: limits operator actions to logs and this deployment scale
+    template: templates/rbac.yaml
+    documentSelector:
+      path: metadata.name
+      value: healthchecks-operator
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: healthchecks
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: ["pods/log"]
+              verbs: ["get"]
+            - apiGroups: ["apps"]
+              resources: ["deployments/scale"]
+              resourceNames: ["healthchecks"]
+              verbs: ["get", "update", "patch"]
+
+  - it: hardens certificate solver pod settings
+    template: templates/certificate.yaml
+    documentSelector:
+      path: kind
+      value: Issuer
+    asserts:
+      - equal:
+          path: spec.acme.solvers[0].http01.ingress.podTemplate.spec.serviceAccountName
+          value: healthchecks
+      - equal:
+          path: spec.acme.solvers[0].http01.ingress.podTemplate.spec.securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+
+  - it: also protects the helm test pod
+    template: templates/tests/test-connection.yaml
+    asserts:
+      - equal:
+          path: spec.automountServiceAccountToken
+          value: false
+      - equal:
+          path: spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true

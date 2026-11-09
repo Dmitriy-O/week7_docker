@@ -1,0 +1,73 @@
+{{- if eq .Values.workload "web" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-viewer
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-operator
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: [{{ .Release.Name | quote }}]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-viewers
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: Group
+    name: {{ printf "%s-viewers" .Release.Name | quote }}
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-viewer
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-operators-view
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: Group
+    name: {{ printf "%s-operators" .Release.Name | quote }}
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-viewer
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-operators-actions
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: Group
+    name: {{ printf "%s-operators" .Release.Name | quote }}
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-operator
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
