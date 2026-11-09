@@ -1,0 +1,6 @@
+filter @logStream like /kube-apiserver-audit/
+| filter stage = "ResponseComplete"
+| filter objectRef.namespace = "healthchecks" and responseStatus.code = 403
+| stats count(*) as deniedRequests by user.username, objectRef.resource
+| sort deniedRequests desc
+| limit 20
