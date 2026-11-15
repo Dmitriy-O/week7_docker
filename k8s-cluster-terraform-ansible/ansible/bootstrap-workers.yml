@@ -1,0 +1,165 @@
+---
+- name: Configure the Kubernetes workers
+  hosts: workers
+  become: true
+  gather_facts: true
+  vars:
+    kubernetes_version: v1.36.1
+    kube_arches: {aarch64: arm64, x86_64: amd64}
+    kube_url: "https://dl.k8s.io/release/{{ kubernetes_version }}/bin/linux/{{ kube_arches[ansible_facts.architecture] }}"
+    cluster_artifacts: "{{ playbook_dir }}/../artifacts/cluster"
+    worker_services:
+      kubelet: >-
+        --config=/etc/kubernetes/kubelet.yml
+        --kubeconfig=/etc/kubernetes/worker.kubeconfig
+        --hostname-override={{ inventory_hostname }} --node-ip={{ node_ip }}
+      kube-proxy: >-
+        --kubeconfig=/etc/kubernetes/kube-proxy.kubeconfig
+        --hostname-override={{ inventory_hostname }}
+        --proxy-mode=iptables --cluster-cidr=10.244.0.0/16
+
+  tasks:
+    - name: Install containerd and the base CNI plugins
+      ansible.builtin.apt:
+        name: [containerd, containernetworking-plugins, conntrack, iptables]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 180
+
+    - name: Create the worker directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: /etc/kubernetes, mode: "0700"}
+        - {path: /etc/containerd, mode: "0755"}
+        - {path: /etc/cni/net.d, mode: "0755"}
+        - {path: /opt/cni/bin, mode: "0755"}
+
+    - name: Put the base CNI binaries in the Flannel CNI directory
+      ansible.builtin.file:
+        src: "/usr/lib/cni/{{ item }}"
+        dest: "/opt/cni/bin/{{ item }}"
+        state: link
+      loop: [bridge, host-local, loopback, portmap]
+
+    - name: Persist the bridge netfilter module after reboot
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/week10-kubernetes.conf
+        mode: "0644"
+        content: "br_netfilter\n"
+
+    - name: Load the module now
+      ansible.builtin.command:
+        argv: [modprobe, br_netfilter]
+      changed_when: false
+
+    - name: Persist packet forwarding
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-week10-kubernetes.conf
+        mode: "0644"
+        content: |
+          net.ipv4.ip_forward = 1
+          net.bridge.bridge-nf-call-iptables = 1
+
+    - name: Apply the forwarding settings now
+      ansible.builtin.command:
+        argv: [sysctl, -p, /etc/sysctl.d/99-week10-kubernetes.conf]
+      changed_when: false
+
+    - name: Configure the containerd CRI
+      ansible.builtin.copy:
+        dest: /etc/containerd/config.toml
+        mode: "0644"
+        content: |
+          version = 2
+          [plugins."io.containerd.grpc.v1.cri"]
+            sandbox_image = "registry.k8s.io/pause:3.10.2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+            runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            SystemdCgroup = true
+      register: containerd_config
+
+    - name: Enable containerd and reload it when its configuration changes
+      ansible.builtin.systemd_service:
+        name: containerd
+        enabled: true
+        state: "{{ 'restarted' if containerd_config is changed else 'started' }}"
+
+    - name: Install verified Kubernetes worker binaries
+      ansible.builtin.get_url:
+        url: "{{ kube_url }}/{{ item }}"
+        checksum: "sha256:{{ kube_url }}/{{ item }}.sha256"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: "0755"
+      loop: "{{ worker_services.keys() | list }}"
+      register: worker_binaries
+
+    - name: Copy only the credentials for this worker
+      ansible.builtin.copy:
+        src: "{{ cluster_artifacts }}/{{ item.src }}"
+        dest: "/etc/kubernetes/{{ item.dest }}"
+        mode: "0600"
+      diff: false
+      loop:
+        - {src: "pki/ca.crt", dest: ca.crt}
+        - {src: "pki/{{ inventory_hostname }}-serving.crt", dest: kubelet.crt}
+        - {src: "pki/{{ inventory_hostname }}-serving.key", dest: kubelet.key}
+        - {src: "kubeconfigs/{{ inventory_hostname }}.kubeconfig", dest: worker.kubeconfig}
+        - {src: "kubeconfigs/kube-proxy.kubeconfig", dest: kube-proxy.kubeconfig}
+      register: worker_credentials
+
+    - name: Configure kubelet
+      ansible.builtin.copy:
+        dest: /etc/kubernetes/kubelet.yml
+        mode: "0600"
+        content: |
+          apiVersion: kubelet.config.k8s.io/v1beta1
+          kind: KubeletConfiguration
+          cgroupDriver: systemd
+          containerRuntimeEndpoint: unix:///run/containerd/containerd.sock
+          clusterDomain: cluster.local
+          clusterDNS: [10.96.0.10]
+          resolvConf: /run/systemd/resolve/resolv.conf
+          authentication:
+            anonymous: {enabled: false}
+            webhook: {enabled: true}
+            x509: {clientCAFile: /etc/kubernetes/ca.crt}
+          authorization: {mode: Webhook}
+          tlsCertFile: /etc/kubernetes/kubelet.crt
+          tlsPrivateKeyFile: /etc/kubernetes/kubelet.key
+          readOnlyPort: 0
+      register: kubelet_config
+
+    - name: Write the worker systemd units
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.key }}.service"
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Kubernetes {{ item.key }}
+          Wants=network-online.target
+          After=network-online.target containerd.service
+
+          [Service]
+          ExecStart=/usr/local/bin/{{ item.key }} {{ item.value | trim }}
+          Restart=on-failure
+          RestartSec=3s
+
+          [Install]
+          WantedBy=multi-user.target
+      loop: "{{ worker_services | dict2items }}"
+      register: worker_units
+
+    - name: Enable and start the worker services
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        daemon_reload: "{{ worker_units is changed }}"
+        enabled: true
+        state: >-
+          {{ 'restarted' if (worker_units is changed or worker_binaries is changed
+          or worker_credentials is changed or kubelet_config is changed) else 'started' }}
+      loop: "{{ worker_services.keys() | list }}"

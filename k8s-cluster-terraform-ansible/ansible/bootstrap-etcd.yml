@@ -1,0 +1,39 @@
+---
+- name: Prepare the etcd configuration or install etcd
+  hosts: "{{ etcd_target | default('control_plane') }}"
+  gather_facts: "{{ not (etcd_smoke | default(false) | bool) }}"
+  become: "{{ not (etcd_smoke | default(false) | bool) }}"
+  vars:
+    etcd_version: v3.6.16
+    etcd_member_name: week10-etcd-1
+    etcd_data_dir: /var/lib/etcd
+    etcd_pki_dir: /etc/etcd/pki
+    etcd_tls_source: "{{ playbook_dir }}/../artifacts/cluster/pki"
+    etcd_smoke_dir: "{{ playbook_dir }}/../artifacts/offline-check/etcd-smoke"
+
+  tasks:
+    - name: Render the etcd config on the local controller
+      when: etcd_smoke | default(false) | bool
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      block:
+        - name: Check that the smoke target is localhost
+          ansible.builtin.assert:
+            that: inventory_hostname == 'localhost'
+
+        - name: Create the smoke test directory
+          ansible.builtin.file:
+            path: "{{ etcd_smoke_dir }}"
+            state: directory
+            mode: "0700"
+
+        - name: Render the shared etcd template
+          ansible.builtin.template:
+            src: roles/bootstrap-etcd/templates/etcd.yml.j2
+            dest: "{{ etcd_smoke_dir }}/etcd.yml"
+            mode: "0600"
+
+    - name: Install etcd on the control plane
+      ansible.builtin.import_role:
+        name: bootstrap-etcd
+      when: not (etcd_smoke | default(false) | bool)

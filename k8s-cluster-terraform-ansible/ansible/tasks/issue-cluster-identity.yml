@@ -1,0 +1,55 @@
+---
+- name: Create the private key for {{ identity.name }}
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_dir }}/{{ identity.name }}.key"
+    type: RSA
+    size: 2048
+    regenerate: fail
+    mode: "0600"
+  no_log: true
+
+- name: Create the CSR for {{ identity.name }}
+  community.crypto.openssl_csr:
+    path: "{{ pki_dir }}/{{ identity.name }}.csr"
+    privatekey_path: "{{ pki_dir }}/{{ identity.name }}.key"
+    common_name: "{{ identity.cn }}"
+    organization_name: "{{ identity.group | default(omit) }}"
+    subject_alt_name: "{{ identity.sans | default([]) }}"
+    use_common_name_for_san: false
+    basic_constraints: ["CA:FALSE"]
+    basic_constraints_critical: true
+    key_usage: [digitalSignature]
+    key_usage_critical: true
+    extended_key_usage: ["{{ identity.eku }}"]
+    mode: "0644"
+
+- name: Sign the certificate for {{ identity.name }}
+  community.crypto.x509_certificate:
+    path: "{{ pki_dir }}/{{ identity.name }}.crt"
+    csr_path: "{{ pki_dir }}/{{ identity.name }}.csr"
+    provider: ownca
+    ownca_path: "{{ pki_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ pki_dir }}/ca.key"
+    ownca_not_after: "+90d"
+    mode: "0644"
+
+- name: Verify the certificate for {{ identity.name }}
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - verify
+      - -purpose
+      - "{{ 'sslclient' if identity.eku == 'clientAuth' else 'sslserver' }}"
+      - -CAfile
+      - "{{ pki_dir }}/ca.crt"
+      - "{{ pki_dir }}/{{ identity.name }}.crt"
+  changed_when: false
+
+- name: Render the kubeconfig for {{ identity.name }}
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/templates/cluster-kubeconfig.yml.j2"
+    dest: "{{ pki_output_dir }}/kubeconfigs/{{ identity.name }}.kubeconfig"
+    mode: "0600"
+  when: identity.kubeconfig is defined
+  no_log: true
+  diff: false

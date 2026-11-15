@@ -1,0 +1,33 @@
+---
+- name: Create the API server private key
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_dir }}/api-server.key"
+    type: RSA
+    size: 2048
+    regenerate: fail
+    mode: "0600"
+  no_log: true
+
+- name: Create the certificate signing request
+  community.crypto.openssl_csr:
+    path: "{{ pki_dir }}/api-server.csr"
+    privatekey_path: "{{ pki_dir }}/api-server.key"
+    common_name: kube-apiserver
+    subject_alt_name: "{{ pki_api_sans }}"
+    use_common_name_for_san: false
+    basic_constraints: ["CA:FALSE"]
+    basic_constraints_critical: true
+    key_usage: [digitalSignature]
+    key_usage_critical: true
+    extended_key_usage: [serverAuth]
+    mode: "0644"
+
+- name: Sign the API server certificate with the test CA
+  community.crypto.x509_certificate:
+    path: "{{ pki_dir }}/api-server.crt"
+    csr_path: "{{ pki_dir }}/api-server.csr"
+    provider: ownca
+    ownca_path: "{{ pki_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ pki_dir }}/ca.key"
+    ownca_not_after: "+90d"
+    mode: "0644"

@@ -1,0 +1,52 @@
+---
+- name: Bootstrap etcd
+  ansible.builtin.import_playbook: bootstrap-etcd.yml
+
+- name: Bootstrap the Kubernetes control plane
+  hosts: control_plane
+  become: true
+  gather_facts: true
+  vars:
+    kubernetes_version: v1.36.1
+    kube_pki_source: "{{ playbook_dir }}/../artifacts/cluster"
+    kube_advertise_ip: "{{ control_plane_private_ip | default(ansible_facts.default_ipv4.address) }}"
+    kube_service_cidr: 10.96.0.0/24
+    kube_pod_cidr: 10.244.0.0/16
+    admin_kubeconfig: "{{ kube_pki_source }}/kubeconfigs/admin.kubeconfig"
+
+  roles:
+    - bootstrap-control-plane
+
+  tasks:
+    - name: Allow the API server client to call the kubelet API
+      ansible.builtin.command:
+        argv: [kubectl, --kubeconfig, "{{ admin_kubeconfig }}", apply, -f, "-"]
+        stdin: |
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: week10-apiserver-kubelet-client
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: system:kubelet-api-admin
+          subjects:
+            - apiGroup: rbac.authorization.k8s.io
+              kind: User
+              name: week10-apiserver-kubelet-client
+      register: kubelet_binding
+      changed_when: "' created' in kubelet_binding.stdout or ' configured' in kubelet_binding.stdout"
+      delegate_to: localhost
+      become: false
+
+    - name: Wait for the controller manager and scheduler to obtain their leader leases
+      ansible.builtin.command:
+        argv: [kubectl, --kubeconfig, "{{ admin_kubeconfig }}", --request-timeout=5s, -n, kube-system, get, lease, "{{ item }}", -o, "jsonpath={.spec.holderIdentity}"]
+      loop: [kube-controller-manager, kube-scheduler]
+      register: component_lease
+      changed_when: false
+      until: component_lease.rc == 0 and (component_lease.stdout | trim | length) > 0
+      retries: 8
+      delay: 3
+      delegate_to: localhost
+      become: false

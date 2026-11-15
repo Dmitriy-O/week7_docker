@@ -1,0 +1,39 @@
+---
+- name: Create the local PKI directory
+  ansible.builtin.file:
+    path: "{{ pki_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Generate the CA private key
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_dir }}/ca.key"
+    type: RSA
+    size: 4096
+    regenerate: fail
+    mode: "0600"
+  no_log: true
+
+- name: Generate the CA certificate signing request
+  community.crypto.openssl_csr:
+    path: "{{ pki_dir }}/ca.csr"
+    privatekey_path: "{{ pki_dir }}/ca.key"
+    common_name: "{{ ca_common_name }}"
+    use_common_name_for_san: false
+    basic_constraints:
+      - "CA:TRUE"
+    basic_constraints_critical: true
+    key_usage:
+      - keyCertSign
+      - cRLSign
+    key_usage_critical: true
+    mode: "0644"
+
+- name: Issue the self-signed CA certificate
+  community.crypto.x509_certificate:
+    path: "{{ pki_dir }}/ca.crt"
+    privatekey_path: "{{ pki_dir }}/ca.key"
+    csr_path: "{{ pki_dir }}/ca.csr"
+    provider: selfsigned
+    selfsigned_not_after: "+365d"
+    mode: "0644"

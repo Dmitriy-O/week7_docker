@@ -1,0 +1,4 @@
+
+# Generated PKI and local Ansible dependencies
+/artifacts/
+/ansible/collections/

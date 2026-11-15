@@ -1,0 +1,22 @@
+---
+- name: Prepare the API server TLS certificate locally
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - inventory/offline-pki.yml
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    pki_dir: "{{ playbook_dir }}/../artifacts/offline-check/pki"
+    ca_common_name: week10-offline-check-ca
+
+  roles:
+    - generate-certs
+
+  tasks:
+    - name: Issue the API server certificate
+      ansible.builtin.import_tasks: tasks/issue-api-server-certificate.yml
+
+    - name: Verify the API server certificate
+      ansible.builtin.import_tasks: tasks/verify-api-server-certificate.yml

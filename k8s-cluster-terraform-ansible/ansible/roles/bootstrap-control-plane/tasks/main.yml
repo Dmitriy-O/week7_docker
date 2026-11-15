@@ -1,0 +1,148 @@
+---
+- name: Install and start the Kubernetes control plane components
+  vars:
+    kube_architectures: {x86_64: amd64, aarch64: arm64}
+    kube_download: "https://dl.k8s.io/release/{{ kubernetes_version }}/bin/linux/{{ kube_architectures[ansible_facts.architecture] }}"
+    kube_service_state: "{{ 'restarted' if (kube_units is changed or kube_credentials is changed or kube_binaries is changed) else 'started' }}"
+    kube_services:
+      kube-apiserver:
+        - "--advertise-address={{ kube_advertise_ip }}"
+        - --bind-address=0.0.0.0
+        - --secure-port=6443
+        - --authorization-mode=Node,RBAC
+        - --enable-admission-plugins=NodeRestriction
+        - --anonymous-auth=false
+        - --client-ca-file=/etc/kubernetes/pki/ca.crt
+        - --tls-cert-file=/etc/kubernetes/pki/api-server.crt
+        - --tls-private-key-file=/etc/kubernetes/pki/api-server.key
+        - --etcd-servers=https://127.0.0.1:2379
+        - --etcd-cafile=/etc/kubernetes/pki/ca.crt
+        - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+        - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+        - --kubelet-certificate-authority=/etc/kubernetes/pki/ca.crt
+        - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
+        - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
+        - --kubelet-preferred-address-types=InternalIP,Hostname
+        - --service-account-issuer=https://kubernetes.default.svc.cluster.local
+        - --service-account-signing-key-file=/etc/kubernetes/pki/service-account.key
+        - --service-account-key-file=/etc/kubernetes/pki/service-account.pub
+        - "--service-cluster-ip-range={{ kube_service_cidr }}"
+        - --encryption-provider-config=/etc/kubernetes/encryption-config.yml
+      kube-controller-manager:
+        - --bind-address=127.0.0.1
+        - --kubeconfig=/etc/kubernetes/kubeconfigs/controller-manager.kubeconfig
+        - --authentication-kubeconfig=/etc/kubernetes/kubeconfigs/controller-manager.kubeconfig
+        - --authorization-kubeconfig=/etc/kubernetes/kubeconfigs/controller-manager.kubeconfig
+        - --root-ca-file=/etc/kubernetes/pki/ca.crt
+        - --service-account-private-key-file=/etc/kubernetes/pki/service-account.key
+        - --use-service-account-credentials=true
+        - --allocate-node-cidrs=true
+        - "--cluster-cidr={{ kube_pod_cidr }}"
+        - "--service-cluster-ip-range={{ kube_service_cidr }}"
+      kube-scheduler:
+        - --bind-address=127.0.0.1
+        - --kubeconfig=/etc/kubernetes/kubeconfigs/scheduler.kubeconfig
+        - --authentication-kubeconfig=/etc/kubernetes/kubeconfigs/scheduler.kubeconfig
+        - --authorization-kubeconfig=/etc/kubernetes/kubeconfigs/scheduler.kubeconfig
+  block:
+    - name: Verify that the target supports this role
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.system == 'Linux'
+          - ansible_facts.service_mgr == 'systemd'
+          - ansible_facts.architecture in kube_architectures
+
+    - name: Create configuration directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/kubernetes
+        - /etc/kubernetes/pki
+        - /etc/kubernetes/kubeconfigs
+
+    - name: Install the Kubernetes binaries with checksum validation
+      ansible.builtin.get_url:
+        url: "{{ kube_download }}/{{ item }}"
+        checksum: "sha256:{{ kube_download }}/{{ item }}.sha256"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: "0755"
+        owner: root
+        group: root
+      loop: "{{ kube_services | list }}"
+      register: kube_binaries
+
+    - name: Copy only the credentials used by the control plane
+      ansible.builtin.copy:
+        src: "{{ kube_pki_source }}/{{ item }}"
+        dest: "/etc/kubernetes/{{ item }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - pki/ca.crt
+        - pki/api-server.crt
+        - pki/api-server.key
+        - pki/apiserver-etcd-client.crt
+        - pki/apiserver-etcd-client.key
+        - pki/apiserver-kubelet-client.crt
+        - pki/apiserver-kubelet-client.key
+        - pki/service-account.pub
+        - pki/service-account.key
+        - kubeconfigs/scheduler.kubeconfig
+        - kubeconfigs/controller-manager.kubeconfig
+        - encryption-config.yml
+      diff: false
+      register: kube_credentials
+
+    - name: Write the systemd units
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.key }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Kubernetes {{ item.key }}
+          Wants=network-online.target
+          After=network-online.target {{ 'etcd.service' if item.key == 'kube-apiserver' else 'kube-apiserver.service' }}
+
+          [Service]
+          ExecStart=/usr/local/bin/{{ item.key }} {{ item.value | join(' ') }}
+          Restart=on-failure
+          RestartSec=3s
+
+          [Install]
+          WantedBy=multi-user.target
+      loop: "{{ kube_services | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: kube_units
+
+    - name: Start the API server
+      ansible.builtin.systemd_service:
+        name: kube-apiserver
+        enabled: true
+        daemon_reload: "{{ kube_units is changed }}"
+        state: "{{ kube_service_state }}"
+
+    - name: Wait for the API server and its bootstrap post-start hooks
+      ansible.builtin.command:
+        argv: [kubectl, --kubeconfig, "{{ admin_kubeconfig }}", --request-timeout=5s, get, --raw, /readyz]
+      register: api_ready
+      changed_when: false
+      until: api_ready.rc == 0 and api_ready.stdout | trim == 'ok'
+      retries: 8
+      delay: 5
+      delegate_to: localhost
+      become: false
+
+    - name: Start the controller manager and scheduler
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: "{{ kube_service_state }}"
+      loop: [kube-controller-manager, kube-scheduler]

@@ -1,0 +1,24 @@
+---
+- name: Check the chain of trust and TLS server purpose
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - verify
+      - -purpose
+      - sslserver
+      - -CAfile
+      - "{{ pki_dir }}/ca.crt"
+      - "{{ pki_dir }}/api-server.crt"
+  changed_when: false
+
+- name: Read SAN from the issued certificate
+  community.crypto.x509_certificate_info:
+    path: "{{ pki_dir }}/api-server.crt"
+  register: api_server_cert
+
+- name: Check that the certificate contains all configured SANs
+  ansible.builtin.assert:
+    that:
+      - (pki_api_sans | difference(api_server_cert.subject_alt_name | default([], true)) | length) == 0
+    fail_msg: "The API server certificate is missing one or more configured SANs."
+    success_msg: "The API server certificate contains all configured SANs."

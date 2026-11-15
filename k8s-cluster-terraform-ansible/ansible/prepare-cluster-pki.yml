@@ -1,0 +1,65 @@
+---
+- name: Prepare and verify the API server certificate
+  ansible.builtin.import_playbook: prepare-api-tls.yml
+
+- name: Prepare the remaining Kubernetes credentials locally
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - inventory/offline-pki.yml
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    pki_output_dir: "{{ playbook_dir }}/../artifacts/offline-check"
+    pki_dir: "{{ pki_output_dir }}/pki"
+    control_plane_ip: "{{ pki_api_endpoint_internal | urlsplit('hostname') }}"
+    pki_workers:
+      - {name: worker-1, ip: 10.50.1.21}
+      - {name: worker-2, ip: 10.50.1.22}
+    pki_component_identities:
+      - {name: admin, cn: week10-admin, group: "system:masters", eku: clientAuth, kubeconfig: external}
+      - {name: scheduler, cn: "system:kube-scheduler", eku: clientAuth, kubeconfig: internal}
+      - {name: controller-manager, cn: "system:kube-controller-manager", eku: clientAuth, kubeconfig: internal}
+      - {name: kube-proxy, cn: "system:kube-proxy", eku: clientAuth, kubeconfig: internal}
+      - {name: apiserver-kubelet-client, cn: week10-apiserver-kubelet-client, eku: clientAuth}
+      - {name: apiserver-etcd-client, cn: week10-apiserver-etcd-client, eku: clientAuth}
+      - name: etcd-server
+        cn: etcd-server
+        eku: serverAuth
+        sans: ["IP:127.0.0.1", "IP:{{ control_plane_ip }}"]
+
+  tasks:
+    - name: Create the directory for kubeconfigs
+      ansible.builtin.file:
+        path: "{{ pki_output_dir }}/kubeconfigs"
+        state: directory
+        mode: "0700"
+
+    - name: Start the list of kubelet identities
+      ansible.builtin.set_fact:
+        pki_kubelet_identities: []
+
+    - name: Add one client and one server identity for each kubelet
+      ansible.builtin.set_fact:
+        pki_kubelet_identities: >-
+          {{ pki_kubelet_identities + [
+            {'name': worker.name, 'cn': 'system:node:' ~ worker.name,
+             'group': 'system:nodes', 'eku': 'clientAuth', 'kubeconfig': 'internal'},
+            {'name': worker.name ~ '-serving', 'cn': worker.name,
+             'eku': 'serverAuth', 'sans': ['DNS:' ~ worker.name, 'IP:' ~ worker.ip]}
+          ] }}
+      loop: "{{ pki_workers }}"
+      loop_control:
+        loop_var: worker
+        label: "{{ worker.name }}"
+
+    - name: Issue and verify the remaining certificates
+      ansible.builtin.include_tasks: tasks/issue-cluster-identity.yml
+      loop: "{{ pki_component_identities + pki_kubelet_identities }}"
+      loop_control:
+        loop_var: identity
+        label: "{{ identity.name }}"
+
+    - name: Prepare ServiceAccount keys and Secrets encryption
+      ansible.builtin.import_tasks: tasks/prepare-apiserver-secrets.yml

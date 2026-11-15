@@ -1,0 +1,130 @@
+---
+- name: Install a single etcd member on Linux
+  vars:
+    etcd_architectures:
+      x86_64: amd64
+      aarch64: arm64
+    etcd_checksums:
+      amd64: c8c0d96d8292ef085deabbf735e9561d3d396768e4d606df005aa25964f21911
+      arm64: ad756ff27ba21e3488cfb84d00f3f4ad8d9b60a93e20f5be5b230a4aab1dc053
+    etcd_arch: "{{ etcd_architectures[ansible_facts.architecture] }}"
+    etcd_release: "etcd-{{ etcd_version }}-linux-{{ etcd_arch }}"
+    etcd_cache: /var/cache/week10-etcd
+  block:
+    - name: Check the supported host and pinned version
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.system == 'Linux'
+          - ansible_facts.service_mgr == 'systemd'
+          - ansible_facts.architecture in etcd_architectures
+          - etcd_version == 'v3.6.16'
+
+    - name: Create the etcd group
+      ansible.builtin.group:
+        name: etcd
+        system: true
+
+    - name: Create the etcd service user
+      ansible.builtin.user:
+        name: etcd
+        group: etcd
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+
+    - name: Create the etcd directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: "{{ etcd_cache }}", owner: root, group: root, mode: "0755"}
+        - {path: /etc/etcd, owner: root, group: etcd, mode: "0750"}
+        - {path: "{{ etcd_pki_dir }}", owner: root, group: etcd, mode: "0750"}
+        - {path: "{{ etcd_data_dir }}", owner: etcd, group: etcd, mode: "0700"}
+
+    - name: Download the pinned etcd release
+      ansible.builtin.get_url:
+        url: "https://github.com/etcd-io/etcd/releases/download/{{ etcd_version }}/{{ etcd_release }}.tar.gz"
+        dest: "{{ etcd_cache }}/{{ etcd_release }}.tar.gz"
+        checksum: "sha256:{{ etcd_checksums[etcd_arch] }}"
+        mode: "0644"
+
+    - name: Unpack the verified archive
+      ansible.builtin.unarchive:
+        src: "{{ etcd_cache }}/{{ etcd_release }}.tar.gz"
+        dest: "{{ etcd_cache }}"
+        remote_src: true
+
+    - name: Install etcd and etcdctl
+      ansible.builtin.copy:
+        src: "{{ etcd_cache }}/{{ etcd_release }}/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      loop: [etcd, etcdctl]
+      notify: Restart etcd
+
+    - name: Copy the CA certificate and etcd server identity
+      ansible.builtin.copy:
+        src: "{{ etcd_tls_source }}/{{ item.name }}"
+        dest: "{{ etcd_pki_dir }}/{{ item.name }}"
+        owner: root
+        group: etcd
+        mode: "{{ item.mode }}"
+      loop:
+        - {name: ca.crt, mode: "0644"}
+        - {name: etcd-server.crt, mode: "0644"}
+        - {name: etcd-server.key, mode: "0640"}
+      diff: false
+      notify: Restart etcd
+
+    - name: Write the etcd configuration
+      ansible.builtin.template:
+        src: etcd.yml.j2
+        dest: /etc/etcd/etcd.yml
+        owner: root
+        group: etcd
+        mode: "0640"
+      notify: Restart etcd
+
+    - name: Install the systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/etcd.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=etcd for the Week 10 control plane
+          After=network.target
+
+          [Service]
+          User=etcd
+          Group=etcd
+          ExecStart=/usr/local/bin/etcd --config-file=/etc/etcd/etcd.yml
+          Restart=on-failure
+          RestartSec=3s
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart etcd
+
+    - name: Apply pending etcd restarts
+      ansible.builtin.meta: flush_handlers
+
+    - name: Start and enable etcd
+      ansible.builtin.systemd_service:
+        name: etcd
+        state: started
+        enabled: true
+
+    - name: Wait for the local etcd client port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 2379
+        timeout: 30

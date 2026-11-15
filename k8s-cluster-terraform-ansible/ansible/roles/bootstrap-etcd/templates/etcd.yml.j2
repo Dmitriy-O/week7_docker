@@ -1,0 +1,14 @@
+name: {{ etcd_member_name }}
+data-dir: {{ etcd_data_dir }}
+listen-client-urls: https://127.0.0.1:2379
+advertise-client-urls: https://127.0.0.1:2379
+listen-peer-urls: http://127.0.0.1:2380
+initial-advertise-peer-urls: http://127.0.0.1:2380
+initial-cluster: {{ etcd_member_name }}=http://127.0.0.1:2380
+initial-cluster-state: new
+initial-cluster-token: week10-etcd
+client-transport-security:
+  cert-file: {{ etcd_pki_dir }}/etcd-server.crt
+  key-file: {{ etcd_pki_dir }}/etcd-server.key
+  trusted-ca-file: {{ etcd_pki_dir }}/ca.crt
+  client-cert-auth: true
