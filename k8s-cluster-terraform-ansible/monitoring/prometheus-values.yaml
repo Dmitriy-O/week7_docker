@@ -1,0 +1,37 @@
+coreDns:
+  enabled: false
+fullnameOverride: week10-monitoring
+grafana:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubelet:
+  serviceMonitor:
+    insecureSkipVerify: false
+prometheus:
+  prometheusSpec:
+    hostNetwork: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 350Mi
+    retention: 24h
+    retentionSize: 256MB
+    scrapeInterval: 30s
+    serviceDiscoveryRole: EndpointSlice
+  service:
+    port: 9090
+    type: ClusterIP
+prometheusOperator:
+  admissionWebhooks:
+    enabled: false
+  kubeletEndpointSliceEnabled: true
+  kubeletEndpointsEnabled: false
+  tls:
+    enabled: false

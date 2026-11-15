@@ -13,6 +13,14 @@
         - --enable-admission-plugins=NodeRestriction
         - --anonymous-auth=false
         - --client-ca-file=/etc/kubernetes/pki/ca.crt
+        - --requestheader-client-ca-file=/etc/kubernetes/front-proxy/ca.crt
+        - --requestheader-allowed-names=front-proxy-client
+        - --requestheader-extra-headers-prefix=X-Remote-Extra-
+        - --requestheader-group-headers=X-Remote-Group
+        - --requestheader-username-headers=X-Remote-User
+        - --proxy-client-cert-file=/etc/kubernetes/front-proxy/front-proxy-client.crt
+        - --proxy-client-key-file=/etc/kubernetes/front-proxy/front-proxy-client.key
+        - --enable-aggregator-routing=true
         - --tls-cert-file=/etc/kubernetes/pki/api-server.crt
         - --tls-private-key-file=/etc/kubernetes/pki/api-server.key
         - --etcd-servers=https://127.0.0.1:2379
@@ -62,6 +70,7 @@
       loop:
         - /etc/kubernetes
         - /etc/kubernetes/pki
+        - /etc/kubernetes/front-proxy
         - /etc/kubernetes/kubeconfigs
 
     - name: Install the Kubernetes binaries with checksum validation
@@ -84,6 +93,9 @@
         mode: "0600"
       loop:
         - pki/ca.crt
+        - front-proxy/ca.crt
+        - front-proxy/front-proxy-client.crt
+        - front-proxy/front-proxy-client.key
         - pki/api-server.crt
         - pki/api-server.key
         - pki/apiserver-etcd-client.crt

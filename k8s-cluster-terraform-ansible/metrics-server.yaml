@@ -1,0 +1,215 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    k8s-app: metrics-server
+    rbac.authorization.k8s.io/aggregate-to-admin: 'true'
+    rbac.authorization.k8s.io/aggregate-to-edit: 'true'
+    rbac.authorization.k8s.io/aggregate-to-view: 'true'
+  name: system:aggregated-metrics-reader
+rules:
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: system:metrics-server
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - nodes/metrics
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: system:metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:metrics-server
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+spec:
+  ports:
+  - appProtocol: https
+    name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+  selector:
+    k8s-app: metrics-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        k8s-app: metrics-server
+    spec:
+      containers:
+      - args:
+        - --secure-port=10443
+        - --tls-cert-file=/tls/tls.crt
+        - --tls-private-key-file=/tls/tls.key
+        - --kubelet-preferred-address-types=InternalIP
+        - --kubelet-use-node-status-port
+        - --kubelet-certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        - --metric-resolution=15s
+        image: registry.k8s.io/metrics-server/metrics-server:v0.8.1
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /livez
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
+        name: metrics-server
+        ports:
+        - containerPort: 10443
+          name: https
+          protocol: TCP
+          hostPort: 10443
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-dir
+        - name: serving-tls
+          mountPath: /tls
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      serviceAccountName: metrics-server
+      volumes:
+      - emptyDir: {}
+        name: tmp-dir
+      - name: serving-tls
+        secret:
+          secretName: metrics-server-serving-tls
+          defaultMode: 288
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        fsGroup: 1000
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: v1beta1.metrics.k8s.io
+spec:
+  group: metrics.k8s.io
+  groupPriorityMinimum: 100
+  service:
+    name: metrics-server
+    namespace: kube-system
+  version: v1beta1
+  versionPriority: 100
+  caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUZDRENDQXZDZ0F3SUJBZ0lVZkg5cDZjK25PRFFaUFhJRDNnSUpUMVlZb1ZFd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0hERWFNQmdHQTFVRUF3d1JkMlZsYXpFd0xXTnNkWE4wWlhJdFkyRXdIaGNOTWpZeE1URTFNVGcwTlRRdwpXaGNOTWpjeE1URTFNVGcwTlRRd1dqQWNNUm93R0FZRFZRUUREQkYzWldWck1UQXRZMngxYzNSbGNpMWpZVENDCkFpSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnSVBBRENDQWdvQ2dnSUJBS3VjZVpsd3pva1JPQStFOWNaRmpwYWgKNGxNMEZ4VFFlSFYzYkE0emVVWmVTV2d1NVpjRkx0ZFVFY1V6aVF3OXBwR2Z3TkR3L3pMM3BqVWlrSWxNWHg5Sgptb0lVY3BOSlo3UUM5NWFQc24vUzc3Z3VpNWVNRFV1MzNnVHRiNHdpTmk0eVY4ZzlyazNNR0xIUmcwY3VaU0lsCnVVVjlvbG9tdTgxL0lrSjVPMERPS24zUnp4dDJObGV3dHJGMnppQzlBbVpEdFNBeDJmaHRESHZhYmo4QlFrREoKL2tpTlQvZUlQREZRRXRrZUQvNzVnNm9EMUZKby9iVFFDY0RSTUtzK01TWmJGRytKclpZTDR0WDJVWGJMSTJ5bwpYYzBTNTVnMHIzVHVDSWFTRzk2K0VpWVNZQWJvMmFsQmtOSzhUdmpzNmMrTU1kclhuMXVBaUExbklvcCtJcmQwCmlVMzE0ZkFwZ2xGUHBpQnJiUXdJQ21TdHlCNTZkQ2d5OVpEV3BVdTJEZ1hyL0ZHckVXU2N4QURBVWIxUXAwYUkKRkx1Sy9DMHh5d3NSRElDbC9ub21RbncrRE1NMmVkeElDbExKRFIraXlQUzNXYmFvc2pGUGRvMzN2Q1FnMVB3WQpxUGpNaEVFRVhic1gveUdKbFB1OVB2ZjZjZHlmeVVncllmd1lnS3pMSHdmOU5MRHlFVWNLWDdyT0lZS05pY2hpCnVGRkFZYklOMkJONlVJclBENEFLb2lCNVRXckhEUWVydjFCek5XemJYSjVRTThOaFRQbjh1VUk5WEJzcENsNEIKdkNLNjBtTk1pWWpvR0ZiQUdtNm5MK2E4aEtDbzdWYWhWWEJXRDh4T3ArZ2tYdForYTJ2T0U0SnNNY0NKK3JsdgprUnV0ZHg3cklKWFI5UmxISGM5TkFnTUJBQUdqUWpCQU1BNEdBMVVkRHdFQi93UUVBd0lCQmpBUEJnTlZIUk1CCkFmOEVCVEFEQVFIL01CMEdBMVVkRGdRV0JCUndNcjJPSWRSNWNUdmVObUxCcC91Wk1NaDhDVEFOQmdrcWhraUcKOXcwQkFRc0ZBQU9DQWdFQW9SZkphajd3WndRN3Nhb0RicXAydkE5YUxlbG9VbThKckliU0hDbDNodFR2YmxwRAplZ1VnTjZxVm1EcTkyRFU5RUNsdTgzNWFhUmNJZ1RHcUNDMXRDVFV2aEhyL3dBMnlQTmg0WmVQOGJqeU0rb2FxCi9XUjdNMWlxMkNjRmRHWkJvaTdEZDJaZjc0Z1JvMWlJYnpBd3lzV2Z5QUVvT1AxTDVENGxPZFZCSko2N0Qrb1oKZks3NHRRYnVSUURlRm1DR1pJaEJuQXdEMEU5dkIvYkhQZzArVjNkdHhROFpkM3loM3E3WUJTNHZVU2o2VXNxZwo1Y0t1WXNwY3FKNWhEWjRZa2JXZ29nNmJGcjZJZitjK0RLVjhIdzJ0THhXeGp3OWJIVmtWQmdHSXdNbk9USWdmCjBadHNtRDhyTGZZMkpEckRHYnV1cm5RQ3lYaitRSmZFSzJMOVNwa0tnNWxsKzlkQmp6ODJQM1hhTVhweThkR0kKYkZ6bkVDc2J0cWZrRHV1Y3lQQzRSRy9IanFnak0vNHlTSnZBZHZVMkZMNWUzL0prM3BSeHNWcjdSTVZLVWcxVwpQN0VMTVVrU3B3QXNvZUFpQmNEQlZpUkF2dFJiOXdIVmRsNjFYU3I5bnUyeVpaaTJ6Z3NHZGl6Tjl5bnROZ2NtCnFmYnRRenlxcDJnLzlYTUM1Ny8xWHhzcGpIQ2V1VEU2eXFZZnNYWVAzOG81NFNxY2J2K2NRWUV1ZXRDUDBMcU4KVWtlSzR1WXJYcG5sT0pBSGszWUpEUkdIVUM3d3J2UmpUVTVGL01QS3NBSUd2ZlcxV2krTHhwNHdhNTRVRzNnWApDNDlQQlBhRm5LOXpKaUJtSWRhK1l2aGhmYlhyalY2TlNpVm9oZU9iTG9sNEx0dnlsTFYweWtwWHlsZz0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=

@@ -1,0 +1,36 @@
+---
+- name: Create the CA and client certificate for API aggregation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    pki_dir: "{{ playbook_dir }}/../artifacts/cluster/front-proxy"
+    ca_common_name: week10-front-proxy-ca
+  roles:
+    - generate-certs
+  tasks:
+    - name: Issue the aggregation client identity
+      ansible.builtin.import_tasks: tasks/issue-cluster-identity.yml
+      vars:
+        identity:
+          name: front-proxy-client
+          cn: front-proxy-client
+          eku: clientAuth
+
+- name: Issue the Metrics Server serving certificate
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    pki_dir: "{{ playbook_dir }}/../artifacts/cluster/pki"
+  tasks:
+    - name: Issue the HTTPS identity used by the aggregated API
+      ansible.builtin.import_tasks: tasks/issue-cluster-identity.yml
+      vars:
+        identity:
+          name: metrics-server-serving
+          cn: metrics-server.kube-system.svc
+          eku: serverAuth
+          sans: ["DNS:metrics-server.kube-system.svc"]

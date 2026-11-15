@@ -26,9 +26,13 @@ resource "aws_vpc_security_group_ingress_rule" "laptop_api" {
 
 resource "aws_vpc_security_group_ingress_rule" "cluster" {
   for_each = {
-    workers_to_api   = { source = "workers", target = "control_plane", protocol = "tcp", port = 6443 }
-    api_to_kubelet   = { source = "control_plane", target = "workers", protocol = "tcp", port = 10250 }
-    workers_to_vxlan = { source = "workers", target = "workers", protocol = "udp", port = 8472 }
+    workers_to_api        = { source = "workers", target = "control_plane", protocol = "tcp", port = 6443 }
+    api_to_kubelet        = { source = "control_plane", target = "workers", protocol = "tcp", port = 10250 }
+    workers_to_vxlan      = { source = "workers", target = "workers", protocol = "udp", port = 8472 }
+    api_to_prometheus     = { source = "control_plane", target = "workers", protocol = "tcp", port = 9090 }
+    workers_to_kubelet    = { source = "workers", target = "workers", protocol = "tcp", port = 10250 }
+    workers_to_exporter   = { source = "workers", target = "workers", protocol = "tcp", port = 9100 }
+    api_to_metrics_server = { source = "control_plane", target = "workers", protocol = "tcp", port = 10443 }
   }
 
   security_group_id            = aws_security_group.cluster[each.value.target].id
