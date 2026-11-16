@@ -4,3 +4,8 @@ description: Django Healthchecks application deployment
 type: application
 version: 0.2.0
 appVersion: "week8"
+
+dependencies:
+  - name: healthchecks-common
+    version: 0.1.0
+    repository: ""

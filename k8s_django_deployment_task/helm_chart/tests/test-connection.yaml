@@ -24,7 +24,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: http-check
-      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      image: {{ include "healthchecks-common.image" . | quote }}
       imagePullPolicy: {{ .Values.image.pullPolicy }}
       command: ["python", "-c"]
       args:

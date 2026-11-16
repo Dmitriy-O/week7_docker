@@ -1,0 +1,37 @@
+suite: Deployment replica settings
+templates:
+  - templates/deployment.yaml
+  - templates/configmap.yaml
+  - templates/secret.yaml
+  - templates/database-ca.yaml
+
+set:
+  secrets.DB_PASSWORD: render-only
+  secrets.SECRET_KEY: render-only
+
+tests:
+  - it: omits replicas when HPA is enabled
+    template: templates/deployment.yaml
+    set:
+      autoscaling.enabled: true
+    asserts:
+      - notExists:
+          path: spec.replicas
+
+  - it: uses replicaCount when HPA is disabled
+    template: templates/deployment.yaml
+    set:
+      autoscaling.enabled: false
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: fails rendering when the image repository is empty
+    template: templates/deployment.yaml
+    set:
+      image.repository: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: image.repository is required

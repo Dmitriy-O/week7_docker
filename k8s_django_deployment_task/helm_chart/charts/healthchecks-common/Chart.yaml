@@ -1,0 +1,5 @@
+apiVersion: v2
+name: healthchecks-common
+description: Shared image helper for the Healthchecks chart
+type: library
+version: 0.1.0

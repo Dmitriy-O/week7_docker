@@ -35,7 +35,7 @@ spec:
 
       containers:
         - name: migrate
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "healthchecks-common.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           command: ["python", "manage.py"]

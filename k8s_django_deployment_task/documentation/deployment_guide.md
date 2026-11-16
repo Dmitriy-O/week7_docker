@@ -270,3 +270,47 @@ These tools also introduced operational overhead. I had to understand driver per
 | Learn PV, PVC and StorageClass concepts. | Definitions and their roles are explained in this guide. |
 | Explain how the resources work together. | The storage flow, binding and static provisioning approach are described above. |
 | Create a PV and attach it to application Pods for static files. | The Helm-managed EFS PV and Bound PVC are deployed; the web Deployment mounts the claim for static files. Both application replicas are Ready. The before/after replacement test passed on distinct nodes, and the static CSS served over HTTPS matched the EFS file. |
+
+## Week 10 Task 3 · Helm Deep Dive
+
+The Healthchecks chart now shares one image helper across the web Deployment, migration Job, static seed Job, and connection test. The helper reports a clear error if the image repository is empty. The values schema checks inputs such as custom Pod labels before Helm renders the manifests.
+
+When HPA is enabled, the Deployment omits `replicas` so the autoscaler can manage the count. When Ingress is disabled, Helm generates no Ingress resource. Unit tests cover both cases.
+
+The install hooks are optional. With `hooks.enabled=true`, the first Job checks that the image can import Django. After Helm creates the web resources, the second Job calls `/health/ready/` through the Service.
+
+```mermaid
+flowchart TD
+    Values["Chart values and schema"] --> Render["Helm renders manifests"]
+    Library["Shared image helper"] --> Render
+    Render --> YAML["Rendered Kubernetes YAML"]
+    YAML --> Kubeval["Kubeval checks resource fields"]
+    YAML --> Kyverno["Kyverno checks workload policy"]
+    Render -->|Install with hooks enabled| Pre["Pre-install Job imports Django"]
+    Pre --> Web["Helm creates Deployment and Service"]
+    Web --> Post["Post-install Job checks readiness"]
+```
+
+### How to verify locally
+
+From the repository root, use Helm with the `helm-unittest` plugin, Kubeval 0.16.1, and Kyverno CLI 1.19.2.
+
+```bash
+chart=k8s_django_deployment_task/helm_chart
+policy=k8s_django_deployment_task/policies/healthchecks-workload.yaml
+schemas=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/6ea44f54bb5cdedb2f61fba42c9b342e97959262
+render_dir="$(mktemp -d)"
+render_values='secrets.DB_PASSWORD=render-only,secrets.SECRET_KEY=render-only'
+
+helm unittest --strict "$chart" &&
+helm lint "$chart" --strict --kube-version 1.36.1 \
+  --set hooks.enabled=true --set-string "$render_values" &&
+helm template healthchecks "$chart" --namespace healthchecks \
+  --kube-version 1.36.1 --set hooks.enabled=true \
+  --set-string "$render_values" > "$render_dir/rendered.yaml" &&
+kubeval --strict --kubernetes-version 1.36.1 \
+  --schema-location "$schemas" "$render_dir/rendered.yaml" &&
+kyverno apply "$policy" --resource "$render_dir/rendered.yaml"
+```
+
+The local run passed 21 Helm tests and validated all 14 rendered resources. Kyverno accepted the Deployment. When `automountServiceAccountToken` was changed to `true` in a temporary Deployment manifest, Kyverno rejected it with the expected policy message. Both hook Jobs were rendered and validated locally. Their execution in a live cluster was outside this verification run.

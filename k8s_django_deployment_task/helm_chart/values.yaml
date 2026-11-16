@@ -57,3 +57,10 @@ autoscaling:
 
 persistence:
   enabled: false
+
+# Optional labels for the web Pods.
+podLabels: {}
+
+# Run install checks only when explicitly enabled.
+hooks:
+  enabled: false

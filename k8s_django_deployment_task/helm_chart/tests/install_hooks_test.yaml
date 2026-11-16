@@ -1,0 +1,38 @@
+suite: Install hooks
+templates:
+  - templates/hooks/install-checks.yaml
+release:
+  name: healthchecks
+  namespace: healthchecks
+tests:
+  - it: defaults to no install jobs
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: creates two install jobs for the web release
+    set:
+      hooks.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-install
+        documentIndex: 0
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: post-install
+        documentIndex: 1
+      - equal:
+          path: spec.template.metadata.labels["app.kubernetes.io/component"]
+          value: test
+        documentIndex: 1
+
+  - it: does not inject install jobs into the migration release
+    set:
+      hooks.enabled: true
+      workload: migration
+    asserts:
+      - hasDocuments:
+          count: 0

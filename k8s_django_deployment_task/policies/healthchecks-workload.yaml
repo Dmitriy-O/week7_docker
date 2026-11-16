@@ -1,0 +1,26 @@
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: healthchecks-workload
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments]
+  matchConditions:
+    - name: healthchecks-namespace
+      expression: object.metadata.namespace == 'healthchecks'
+  validations:
+    - message: Healthchecks Deployments must have non-empty app and instance pod labels.
+      expression: >-
+        has(object.spec.template.metadata.labels) &&
+        ['app.kubernetes.io/name', 'app.kubernetes.io/instance'].all(key,
+          key in object.spec.template.metadata.labels &&
+          object.spec.template.metadata.labels[key] != '')
+    - message: Healthchecks Deployments must disable automatic service account token mounting.
+      expression: >-
+        has(object.spec.template.spec.automountServiceAccountToken) &&
+        object.spec.template.spec.automountServiceAccountToken == false
